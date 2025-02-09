@@ -1,15 +1,13 @@
-import argparse
 import asyncio
 import json
 import logging
 import os
-import ssl
 import uuid
 
 import cv2
 from aiohttp import web
 from aiortc import MediaStreamTrack, RTCPeerConnection, RTCSessionDescription
-from aiortc.contrib.media import MediaBlackhole, MediaPlayer, MediaRecorder, MediaRelay
+from aiortc.contrib.media import MediaBlackhole, MediaRecorder, MediaRelay
 from av import VideoFrame
 
 ROOT = os.path.dirname(__file__)
@@ -81,7 +79,7 @@ class VideoTransformTrack(MediaStreamTrack):
             img = cv2.warpAffine(img, M, (cols, rows))
 
             # rebuild a VideoFrame, preserving timing information
-            new_frame = VideoFrame.from_ndarray(img, format="bgr24")
+            new_frame = VideoFrame.from_ndarray(array=img, format="bgr24")
             new_frame.pts = frame.pts
             new_frame.time_base = frame.time_base
             return new_frame
@@ -113,11 +111,12 @@ async def offer(request):
     log_info("Created for %s", request.remote)
 
     # prepare local media
-    player = MediaPlayer(os.path.join(ROOT, "demo-instruct.wav"))
-    if args.record_to:
-        recorder = MediaRecorder(args.record_to)
-    else:
-        recorder = MediaBlackhole()
+    # player = MediaPlayer(os.path.join(ROOT, "demo-instruct.wav"))
+
+    # MARK: save to
+    save_to = None
+    # save_to = "recorded.mp4"
+    recorder = save_to and MediaRecorder(save_to) or MediaBlackhole()
 
     @pc.on("datachannel")
     def on_datachannel(channel):
@@ -137,13 +136,13 @@ async def offer(request):
     def on_track(track):
         log_info("Track %s received", track.kind)
 
-        if track.kind == "audio":
-            pc.addTrack(player.audio)
-            recorder.addTrack(track)
-        elif track.kind == "video":
+        # if track.kind == "audio":
+        #     pc.addTrack(player.audio)
+        #     recorder.addTrack(track)
+        if track.kind == "video":
             pc.addTrack(VideoTransformTrack(relay.subscribe(track), transform=params["video_transform"]))
-            if args.record_to:
-                recorder.addTrack(relay.subscribe(track))
+            # MARK: save to
+            # recorder.addTrack(relay.subscribe(track))
 
         @track.on("ended")
         async def on_ended():
@@ -172,29 +171,10 @@ async def on_shutdown(app):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="WebRTC audio / video / data-channels demo")
-    parser.add_argument("--cert-file", help="SSL certificate file (for HTTPS)")
-    parser.add_argument("--key-file", help="SSL key file (for HTTPS)")
-    parser.add_argument("--host", default="127.0.0.1", help="Host for HTTP server (default: 0.0.0.0)")
-    parser.add_argument("--port", type=int, default=5000, help="Port for HTTP server (default: 8080)")
-    parser.add_argument("--record-to", help="Write received media to a file.")
-    parser.add_argument("--verbose", "-v", action="count")
-    args = parser.parse_args()
-
-    if args.verbose:
-        logging.basicConfig(level=logging.DEBUG)
-    else:
-        logging.basicConfig(level=logging.INFO)
-
-    if args.cert_file:
-        ssl_context = ssl.SSLContext()
-        ssl_context.load_cert_chain(args.cert_file, args.key_file)
-    else:
-        ssl_context = None
-
+    logging.basicConfig(level=logging.INFO)
     app = web.Application()
     app.on_shutdown.append(on_shutdown)
     app.router.add_get("/", index)
     app.router.add_get("/client.js", javascript)
     app.router.add_post("/offer", offer)
-    web.run_app(app, access_log=None, host=args.host, port=args.port, ssl_context=ssl_context)
+    web.run_app(app, access_log=None, host="127.0.0.1", port=5000)
