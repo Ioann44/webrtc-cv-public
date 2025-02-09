@@ -15,10 +15,6 @@ function createPeerConnection() {
         sdpSemantics: 'unified-plan'
     };
 
-    if (document.getElementById('use-stun').checked) {
-        config.iceServers = [{ urls: ['stun:stun.l.google.com:19302'] }];
-    }
-
     pc = new RTCPeerConnection(config);
 
     // register some listeners to help debugging
@@ -39,10 +35,7 @@ function createPeerConnection() {
 
     // connect audio / video
     pc.addEventListener('track', (evt) => {
-        if (evt.track.kind == 'video')
-            document.getElementById('video').srcObject = evt.streams[0];
-        else
-            document.getElementById('audio').srcObject = evt.streams[0];
+        document.getElementById('video').srcObject = evt.streams[0];
     });
 
     return pc;
@@ -61,10 +54,6 @@ function enumerateInputDevices() {
     };
 
     navigator.mediaDevices.enumerateDevices().then((devices) => {
-        populateSelect(
-            document.getElementById('audio-input'),
-            devices.filter((device) => device.kind == 'audioinput')
-        );
         populateSelect(
             document.getElementById('video-input'),
             devices.filter((device) => device.kind == 'videoinput')
@@ -94,19 +83,6 @@ function negotiate() {
         });
     }).then(() => {
         var offer = pc.localDescription;
-        var codec;
-
-        codec = document.getElementById('audio-codec').value;
-        if (codec !== 'default') {
-            offer.sdp = sdpFilterCodec('audio', codec, offer.sdp);
-        }
-
-        codec = document.getElementById('video-codec').value;
-        if (codec !== 'default') {
-            offer.sdp = sdpFilterCodec('video', codec, offer.sdp);
-        }
-
-        document.getElementById('offer-sdp').textContent = offer.sdp;
         return fetch('/offer', {
             body: JSON.stringify({
                 sdp: offer.sdp,
@@ -121,7 +97,6 @@ function negotiate() {
     }).then((response) => {
         return response.json();
     }).then((answer) => {
-        document.getElementById('answer-sdp').textContent = answer.sdp;
         return pc.setRemoteDescription(answer);
     }).catch((e) => {
         alert(e);
@@ -144,8 +119,8 @@ function start() {
         }
     };
 
-    if (document.getElementById('use-datachannel').checked) {
-        var parameters = JSON.parse(document.getElementById('datachannel-parameters').value);
+    {
+        var parameters = { "ordered": false, "maxRetransmits": 0 };
 
         dc = pc.createDataChannel('chat', parameters);
         dc.addEventListener('close', () => {
@@ -177,26 +152,21 @@ function start() {
         video: false
     };
 
-    if (document.getElementById('use-audio').checked) {
-        const audioConstraints = {};
-
-        const device = document.getElementById('audio-input').value;
-        if (device) {
-            audioConstraints.deviceId = { exact: device };
-        }
-
-        constraints.audio = Object.keys(audioConstraints).length ? audioConstraints : true;
-    }
-
-    if (document.getElementById('use-video').checked) {
+    {
         const videoConstraints = {};
 
         const device = document.getElementById('video-input').value;
         if (device) {
             videoConstraints.deviceId = { exact: device };
+        } else {
+            alert('Please select a video input device.')
         }
 
-        const resolution = document.getElementById('video-resolution').value;
+        const resolution = ""
+        // "320x240"
+        // "640x480"
+        // "960x540"
+        // "1280x720"
         if (resolution) {
             const dimensions = resolution.split('x');
             videoConstraints.width = parseInt(dimensions[0], 0);
@@ -206,12 +176,10 @@ function start() {
         constraints.video = Object.keys(videoConstraints).length ? videoConstraints : true;
     }
 
-    // Acquire media and start negociation.
+    // Acquire media and start negotiation.
 
-    if (constraints.audio || constraints.video) {
-        if (constraints.video) {
-            document.getElementById('media').style.display = 'block';
-        }
+    if (constraints.video) {
+        document.getElementById('media').style.display = 'block';
         navigator.mediaDevices.getUserMedia(constraints).then((stream) => {
             stream.getTracks().forEach((track) => {
                 pc.addTrack(track, stream);
