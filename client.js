@@ -11,8 +11,12 @@ var dc = null, dcInterval = null;
 
 function createPeerConnection() {
     var config = { sdpSemantics: 'unified-plan' };
+    config.iceServers = [{
+        urls: ['stun:stun.l.google.com:19302', "stun:stun1.l.google.com:19302", "stun:stun2.l.google.com: 19302"]
+    },];
 
-    pc = new RTCPeerConnection(config);
+    // pc = new RTCPeerConnection(config);
+    pc = new RTCPeerConnection();
 
     // register some listeners to help debugging
     pc.addEventListener('icegatheringstatechange', () => { iceGatheringProgress++; }, false);
@@ -147,10 +151,10 @@ function start() {
     }
 
     const resolution = ""
-    // "320x240"
-    // "640x480"
-    // "960x540"
-    // "1280x720"
+    // const resolution = "320x240"
+    // const resolution = "640x480"
+    // const resolution = "960x540"
+    // const resolution = "1280x720"
     if (resolution) {
         const dimensions = resolution.split('x');
         videoConstraints.width = parseInt(dimensions[0], 0);
