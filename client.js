@@ -11,9 +11,9 @@ var dc = null, dcInterval = null;
 
 function createPeerConnection() {
     var config = { sdpSemantics: 'unified-plan' };
-    config.iceServers = [{
-        urls: ['stun:stun.l.google.com:19302', "stun:stun1.l.google.com:19302", "stun:stun2.l.google.com: 19302"]
-    },];
+    // config.iceServers = [{
+    //     urls: ['stun:stun.l.google.com:19302', "stun:stun1.l.google.com:19302", "stun:stun2.l.google.com: 19302"]
+    // },];
 
     // pc = new RTCPeerConnection(config);
     pc = new RTCPeerConnection();
@@ -73,8 +73,8 @@ function negotiate() {
         });
     }).then(() => {
         var offer = pc.localDescription;
-        const codecName = 'H264/90000';
-        // const codecName = 'VP8/90000';
+        // const codecName = 'H264/90000';
+        const codecName = 'VP8/90000';
 
         offer.sdp = sdpFilterCodec('video', codecName, offer.sdp);
         return fetch('/offer', {

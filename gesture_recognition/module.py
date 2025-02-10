@@ -2,13 +2,12 @@ from pathlib import Path
 from ultralytics import YOLO
 import cv2
 
-MODEL_PATH = "YOLOv10x_gestures.pt"
+MODEL_PATH = "YOLOv10n_gestures.pt"
 full_model_path = Path(__file__).with_name(MODEL_PATH)
 model = YOLO(full_model_path)
 
 
 def process_frame(frame: cv2.typing.MatLike):
-    cv2.flip(frame, 1, frame)
     results = model(frame)
 
     for result in results:

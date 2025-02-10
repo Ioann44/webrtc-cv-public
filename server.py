@@ -3,12 +3,14 @@ import json
 import logging
 import os
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 
 import cv2
 from aiohttp import web
 from aiortc import MediaStreamTrack, RTCPeerConnection, RTCSessionDescription
 from aiortc.contrib.media import MediaBlackhole, MediaRecorder, MediaRelay
 from av import VideoFrame
+from gesture_recognition.module import process_frame
 
 ROOT = os.path.dirname(__file__)
 
@@ -28,9 +30,12 @@ class VideoTransformTrack(MediaStreamTrack):
         super().__init__()  # don't forget this!
         self.track = track
         self.transform = transform
+        self.executor = ThreadPoolExecutor(max_workers=1)
+        self.last_processed = None
+        self.last_processing = None
 
     async def recv(self):
-        frame = await self.track.recv()
+        frame: VideoFrame = await self.track.recv()
 
         if self.transform == "cartoon":
             img = frame.to_ndarray(format="bgr24")
@@ -72,15 +77,18 @@ class VideoTransformTrack(MediaStreamTrack):
             new_frame.time_base = frame.time_base
             return new_frame
         elif self.transform == "gesture":
-            from gesture_recognition.module import process_frame
-
             img = frame.to_ndarray(format="bgr24")  # Преобразуем VideoFrame в numpy-изображение
-            logger.info("Image received")
-            processed_img = process_frame(img)  # Обрабатываем изображение
-            logger.info("Image processed")
-            new_frame = VideoFrame.from_ndarray(processed_img, format="bgr24")  # Создаём новый VideoFrame
+            cv2.flip(img, 1, img)
 
-            # Сохраняем тайминг оригинального кадра
+            if self.last_processing is None or self.last_processing.done():
+                # send new to process
+                if self.last_processing is None:
+                    self.last_processed = img
+                else:
+                    self.last_processed = self.last_processing.result()
+                self.last_processing = self.executor.submit(process_frame, img)
+
+            new_frame = VideoFrame.from_ndarray(self.last_processed, format="bgr24")
             new_frame.pts = frame.pts
             new_frame.time_base = frame.time_base
             return new_frame
