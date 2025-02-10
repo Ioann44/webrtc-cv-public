@@ -71,6 +71,8 @@ class VideoTransformTrack(MediaStreamTrack):
             new_frame.pts = frame.pts
             new_frame.time_base = frame.time_base
             return new_frame
+        elif self.transform == "gesture":
+            pass
         else:
             return frame
 
