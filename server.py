@@ -72,7 +72,18 @@ class VideoTransformTrack(MediaStreamTrack):
             new_frame.time_base = frame.time_base
             return new_frame
         elif self.transform == "gesture":
-            pass
+            from gesture_recognition.module import process_frame
+
+            img = frame.to_ndarray(format="bgr24")  # Преобразуем VideoFrame в numpy-изображение
+            logger.info("Image received")
+            processed_img = process_frame(img)  # Обрабатываем изображение
+            logger.info("Image processed")
+            new_frame = VideoFrame.from_ndarray(processed_img, format="bgr24")  # Создаём новый VideoFrame
+
+            # Сохраняем тайминг оригинального кадра
+            new_frame.pts = frame.pts
+            new_frame.time_base = frame.time_base
+            return new_frame
         else:
             return frame
 

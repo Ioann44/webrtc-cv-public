@@ -73,6 +73,10 @@ function negotiate() {
         });
     }).then(() => {
         var offer = pc.localDescription;
+        const codecName = 'H264/90000';
+        // const codecName = 'VP8/90000';
+
+        offer.sdp = sdpFilterCodec('video', codecName, offer.sdp);
         return fetch('/offer', {
             body: JSON.stringify({
                 sdp: offer.sdp,
@@ -232,10 +236,10 @@ function sdpFilterCodec(kind, codec, realSdp) {
                 allowed.push(parseInt(match[1]));
             }
 
-            match = lines[i].match(rtxRegex);
-            if (match && allowed.includes(parseInt(match[2]))) {
-                allowed.push(parseInt(match[1]));
-            }
+            // match = lines[i].match(rtxRegex);
+            // if (match && allowed.includes(parseInt(match[2]))) {
+            //     allowed.push(parseInt(match[1]));
+            // }
         }
     }
 
