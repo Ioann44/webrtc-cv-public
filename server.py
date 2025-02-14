@@ -10,7 +10,7 @@ from aiohttp import web
 from aiortc import MediaStreamTrack, RTCPeerConnection, RTCSessionDescription
 from aiortc.contrib.media import MediaBlackhole, MediaRecorder, MediaRelay
 from av import VideoFrame
-from gesture_recognition.module import process_frame
+from gesture_recognition.module import detect, draw, process_frame
 
 ROOT = os.path.dirname(__file__)
 
@@ -31,8 +31,8 @@ class VideoTransformTrack(MediaStreamTrack):
         self.track = track
         self.transform = transform
         self.executor = ThreadPoolExecutor(max_workers=1)
-        self.last_processed = None
-        self.last_processing = None
+        self.last_detected = []
+        self.detecting = None
 
     async def recv(self):
         frame: VideoFrame = await self.track.recv()
@@ -80,15 +80,13 @@ class VideoTransformTrack(MediaStreamTrack):
             img = frame.to_ndarray(format="bgr24")  # Преобразуем VideoFrame в numpy-изображение
             cv2.flip(img, 1, img)
 
-            if self.last_processing is None or self.last_processing.done():
-                # send new to process
-                if self.last_processing is None:
-                    self.last_processed = img
-                else:
-                    self.last_processed = self.last_processing.result()
-                self.last_processing = self.executor.submit(process_frame, img)
+            if self.detecting is None or self.detecting.done():
+                if self.detecting is not None:
+                    self.last_detected = self.detecting.result()
+                self.detecting = self.executor.submit(detect, img)
 
-            new_frame = VideoFrame.from_ndarray(self.last_processed, format="bgr24")
+            draw(img, self.last_detected)
+            new_frame = VideoFrame.from_ndarray(img, format="bgr24")
             new_frame.pts = frame.pts
             new_frame.time_base = frame.time_base
             return new_frame
