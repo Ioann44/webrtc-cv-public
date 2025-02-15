@@ -3,16 +3,20 @@ import json
 import logging
 import os
 import uuid
+from collections import deque
 from concurrent.futures import ThreadPoolExecutor
+from typing import Any, cast
 
 import cv2
 from aiohttp import web
 from aiortc import MediaStreamTrack, RTCPeerConnection, RTCSessionDescription
 from aiortc.contrib.media import MediaBlackhole, MediaRecorder, MediaRelay
 from av import VideoFrame
-from gesture_recognition.module import detect, draw, process_frame
+from cv2.typing import MatLike
+from gesture_recognition import module as gr
 
 ROOT = os.path.dirname(__file__)
+IMAGES_BUFFER_SIZE = 5
 
 logger = logging.getLogger("pc")
 pcs = set()
@@ -32,14 +36,16 @@ class VideoTransformTrack(MediaStreamTrack):
         self.transform = transform
         self.executor = ThreadPoolExecutor(max_workers=1)
         self.last_detected = []
-        self.detecting = None
+        self.last_tracked = {}
+        self.processing = None
+        self.images_buffer: deque[MatLike] = deque(maxlen=IMAGES_BUFFER_SIZE)
 
     async def recv(self):
         frame: VideoFrame = await self.track.recv()
+        img: MatLike = frame.to_ndarray(format="bgr24")
+        cv2.flip(img, 1, img)
 
         if self.transform == "cartoon":
-            img = frame.to_ndarray(format="bgr24")
-
             # prepare color
             img_color = cv2.pyrDown(cv2.pyrDown(img))
             for _ in range(6):
@@ -60,38 +66,33 @@ class VideoTransformTrack(MediaStreamTrack):
 
             # combine color and edges
             img = cv2.bitwise_and(img_color, img_edges)
-
-            # rebuild a VideoFrame, preserving timing information
-            new_frame = VideoFrame.from_ndarray(img, format="bgr24")
-            new_frame.pts = frame.pts
-            new_frame.time_base = frame.time_base
-            return new_frame
         elif self.transform == "edges":
             # perform edge detection
-            img = frame.to_ndarray(format="bgr24")
             img = cv2.cvtColor(cv2.Canny(img, 100, 200), cv2.COLOR_GRAY2BGR)
-
-            # rebuild a VideoFrame, preserving timing information
-            new_frame = VideoFrame.from_ndarray(img, format="bgr24")
-            new_frame.pts = frame.pts
-            new_frame.time_base = frame.time_base
-            return new_frame
-        elif self.transform == "gesture":
-            img = frame.to_ndarray(format="bgr24")  # Преобразуем VideoFrame в numpy-изображение
-            cv2.flip(img, 1, img)
-
-            if self.detecting is None or self.detecting.done():
-                if self.detecting is not None:
-                    self.last_detected = self.detecting.result()
-                self.detecting = self.executor.submit(detect, img)
-
-            draw(img, self.last_detected)
-            new_frame = VideoFrame.from_ndarray(img, format="bgr24")
-            new_frame.pts = frame.pts
-            new_frame.time_base = frame.time_base
-            return new_frame
         else:
-            return frame
+            self.images_buffer.append(img)
+            if self.processing is None or self.processing.done():
+                if self.transform == "detection":
+                    if self.processing is not None:
+                        self.last_detected = self.processing.result()
+                    self.processing = self.executor.submit(gr.detect, img)
+                elif self.transform == "tracking":
+                    if self.processing is not None:
+                        self.last_tracked = self.processing.result()
+                    self.processing = self.executor.submit(gr.track_objects, img)
+
+            img = self.images_buffer[0]
+            if self.transform == "detection":
+                assert isinstance(self.last_detected, list)
+                gr.draw_detections(img, self.last_detected)
+            elif self.transform == "tracking":
+                assert isinstance(self.last_tracked, dict)
+                gr.draw_tracks(img, self.last_tracked)
+
+        new_frame = VideoFrame.from_ndarray(cast(Any, img), format="bgr24")
+        new_frame.pts = frame.pts
+        new_frame.time_base = frame.time_base
+        return new_frame
 
 
 async def index(request):
