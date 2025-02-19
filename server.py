@@ -8,12 +8,13 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Any, cast
 
 import cv2
+import tqdm
 from aiohttp import web
 from aiortc import MediaStreamTrack, RTCPeerConnection, RTCSessionDescription
 from aiortc.contrib.media import MediaBlackhole, MediaRecorder, MediaRelay
 from av import VideoFrame
 from cv2.typing import MatLike
-from gesture_recognition import module as gr
+from module import gesture, skeleton
 
 ROOT = os.path.dirname(__file__)
 IMAGES_BUFFER_SIZE = 5
@@ -21,6 +22,8 @@ IMAGES_BUFFER_SIZE = 5
 logger = logging.getLogger("pc")
 pcs = set()
 relay = MediaRelay()
+
+progress_bar = tqdm.tqdm(unit="frame", smoothing=0.1)
 
 
 class VideoTransformTrack(MediaStreamTrack):
@@ -41,53 +44,61 @@ class VideoTransformTrack(MediaStreamTrack):
         self.images_buffer: deque[MatLike] = deque(maxlen=IMAGES_BUFFER_SIZE)
 
     async def recv(self):
+        if self.transform not in ("detection", "tracking"):
+            progress_bar.update()
+
         frame: VideoFrame = await self.track.recv()
         img: MatLike = frame.to_ndarray(format="bgr24")
         cv2.flip(img, 1, img)
 
-        if self.transform == "cartoon":
-            # prepare color
-            img_color = cv2.pyrDown(cv2.pyrDown(img))
-            for _ in range(6):
-                img_color = cv2.bilateralFilter(img_color, 9, 9, 7)
-            img_color = cv2.pyrUp(cv2.pyrUp(img_color))
+        match self.transform:
+            case "cartoon":
+                # prepare color
+                img_color = cv2.pyrDown(cv2.pyrDown(img))
+                for _ in range(6):
+                    img_color = cv2.bilateralFilter(img_color, 9, 9, 7)
+                img_color = cv2.pyrUp(cv2.pyrUp(img_color))
 
-            # prepare edges
-            img_edges = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
-            img_edges = cv2.adaptiveThreshold(
-                cv2.medianBlur(img_edges, 7),
-                255,
-                cv2.ADAPTIVE_THRESH_MEAN_C,
-                cv2.THRESH_BINARY,
-                9,
-                2,
-            )
-            img_edges = cv2.cvtColor(img_edges, cv2.COLOR_GRAY2RGB)
+                # prepare edges
+                img_edges = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
+                img_edges = cv2.adaptiveThreshold(
+                    cv2.medianBlur(img_edges, 7),
+                    255,
+                    cv2.ADAPTIVE_THRESH_MEAN_C,
+                    cv2.THRESH_BINARY,
+                    9,
+                    2,
+                )
+                img_edges = cv2.cvtColor(img_edges, cv2.COLOR_GRAY2RGB)
 
-            # combine color and edges
-            img = cv2.bitwise_and(img_color, img_edges)
-        elif self.transform == "edges":
-            # perform edge detection
-            img = cv2.cvtColor(cv2.Canny(img, 100, 200), cv2.COLOR_GRAY2BGR)
-        else:
-            self.images_buffer.append(img)
-            if self.processing is None or self.processing.done():
+                # combine color and edges
+                img = cv2.bitwise_and(img_color, img_edges)
+            case "edges":
+                img = cv2.cvtColor(cv2.Canny(img, 100, 200), cv2.COLOR_GRAY2BGR)
+            case "skeleton":
+                skeleton.draw_skeleton(img)
+            case "hands":
+                skeleton.draw_hands(img)
+            case "detection" | "tracking":
+                self.images_buffer.append(img)
+                if self.processing is None or self.processing.done():
+                    progress_bar.update()
+                    if self.transform == "detection":
+                        if self.processing is not None:
+                            self.last_detected = self.processing.result()
+                        self.processing = self.executor.submit(gesture.detect, img)
+                    else:
+                        if self.processing is not None:
+                            self.last_tracked = self.processing.result()
+                        self.processing = self.executor.submit(gesture.track_objects, img)
+
+                img = self.images_buffer[0]
                 if self.transform == "detection":
-                    if self.processing is not None:
-                        self.last_detected = self.processing.result()
-                    self.processing = self.executor.submit(gr.detect, img)
-                elif self.transform == "tracking":
-                    if self.processing is not None:
-                        self.last_tracked = self.processing.result()
-                    self.processing = self.executor.submit(gr.track_objects, img)
-
-            img = self.images_buffer[0]
-            if self.transform == "detection":
-                assert isinstance(self.last_detected, list)
-                gr.draw_detections(img, self.last_detected)
-            elif self.transform == "tracking":
-                assert isinstance(self.last_tracked, dict)
-                gr.draw_tracks(img, self.last_tracked)
+                    assert isinstance(self.last_detected, list)
+                    gesture.draw_detections(img, self.last_detected)
+                else:
+                    assert isinstance(self.last_tracked, dict)
+                    gesture.draw_tracks(img, self.last_tracked)
 
         new_frame = VideoFrame.from_ndarray(cast(Any, img), format="bgr24")
         new_frame.pts = frame.pts

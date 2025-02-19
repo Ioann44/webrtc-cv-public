@@ -32,8 +32,9 @@ def draw_detections(image: cv2.typing.MatLike, detections: list[tuple[int, int, 
 trajectories = {}
 
 
-def track_objects(image: cv2.typing.MatLike, threshold=0.25) -> dict:
-    results = model.track(image, persist=True, conf=threshold, verbose=False)
+def track_objects(image: cv2.typing.MatLike, threshold=0.25, iou=0.7) -> dict:
+    results = model.track(image, persist=True, conf=threshold, iou=iou, verbose=False, tracker="botsort.yaml")
+    # results = model.track(image, persist=True, conf=threshold, iou=iou, verbose=False, tracker="bytetrack.yaml")
     tracks = {}
 
     for track in results:
