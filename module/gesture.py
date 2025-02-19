@@ -3,7 +3,7 @@ from ultralytics import YOLO
 import cv2
 
 MODEL_PATH = "YOLOv10n_gestures.pt"
-full_model_path = Path(__file__).with_name(MODEL_PATH)
+full_model_path = Path(__file__).parent.parent.joinpath("resources", MODEL_PATH)
 model = YOLO(full_model_path)
 
 

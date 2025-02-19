@@ -77,11 +77,14 @@ function negotiate() {
         const codecName = 'VP8/90000';
 
         offer.sdp = sdpFilterCodec('video', codecName, offer.sdp);
+        // MARK: test: transformation
+        // const video_transform = document.getElementById('video-transform').value;
+        const video_transform = "test";
         return fetch('/offer', {
             body: JSON.stringify({
                 sdp: offer.sdp,
                 type: offer.type,
-                video_transform: document.getElementById('video-transform').value
+                video_transform: video_transform
             }),
             headers: {
                 'Content-Type': 'application/json'
@@ -98,12 +101,12 @@ function negotiate() {
 }
 
 function start() {
-    document.getElementById('start').style.display = 'none';
+    for (const node of document.getElementsByClassName("hide-on-start")) {
+        node.style.display = 'none';
+    }
 
     pc = createPeerConnection();
-
     var time_start = null;
-
     const current_stamp = () => {
         if (time_start === null) {
             time_start = new Date().getTime();
@@ -147,7 +150,9 @@ function start() {
 
     const videoConstraints = {};
 
-    const device = document.getElementById('video-input').value;
+    // MARK: test: select camera
+    // const device = document.getElementById('video-input').value;
+    const device = "e6852e7c5c2cf1ed8f64f2aef74a244258616410ec9a5af815d12677be3c5356";
     if (device) {
         videoConstraints.deviceId = { exact: device };
     } else {
@@ -182,36 +187,6 @@ function start() {
     } else {
         negotiate();
     }
-
-    document.getElementById('stop').style.display = 'inline-block';
-}
-
-function stop() {
-    document.getElementById('stop').style.display = 'none';
-
-    // close data channel
-    if (dc) {
-        dc.close();
-    }
-
-    // close transceivers
-    if (pc.getTransceivers) {
-        pc.getTransceivers().forEach((transceiver) => {
-            if (transceiver.stop) {
-                transceiver.stop();
-            }
-        });
-    }
-
-    // close local audio / video
-    pc.getSenders().forEach((sender) => {
-        sender.track.stop();
-    });
-
-    // close peer connection
-    setTimeout(() => {
-        pc.close();
-    }, 500);
 }
 
 function sdpFilterCodec(kind, codec, realSdp) {
@@ -235,11 +210,6 @@ function sdpFilterCodec(kind, codec, realSdp) {
             if (match) {
                 allowed.push(parseInt(match[1]));
             }
-
-            // match = lines[i].match(rtxRegex);
-            // if (match && allowed.includes(parseInt(match[2]))) {
-            //     allowed.push(parseInt(match[1]));
-            // }
         }
     }
 
@@ -276,3 +246,6 @@ function escapeRegExp(string) {
 }
 
 enumerateInputDevices();
+
+// MARK: test: startup
+start();

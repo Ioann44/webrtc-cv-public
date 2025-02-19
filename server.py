@@ -99,6 +99,8 @@ class VideoTransformTrack(MediaStreamTrack):
                 else:
                     assert isinstance(self.last_tracked, dict)
                     gesture.draw_tracks(img, self.last_tracked)
+            case _:
+                pass
 
         new_frame = VideoFrame.from_ndarray(cast(Any, img), format="bgr24")
         new_frame.pts = frame.pts
