@@ -1,3 +1,7 @@
+import * as THREE from 'three';
+import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader';
+import { TextureLoader } from 'three/src/loaders/TextureLoader';
+
 // get DOM elements
 var dataChannelLog = document.getElementById('data-channel');
 var iceConnectionProgress = 0,
@@ -8,6 +12,9 @@ var iceConnectionProgress = 0,
 var pc = null;
 // data channel
 var dc = null, dcInterval = null;
+
+// Three.js variables
+let scene, camera, renderer, model;
 
 function createPeerConnection() {
     var config = { sdpSemantics: 'unified-plan' };
@@ -73,13 +80,10 @@ function negotiate() {
         });
     }).then(() => {
         var offer = pc.localDescription;
-        // const codecName = 'H264/90000';
         const codecName = 'VP8/90000';
+        const video_transform = document.getElementById('video-transform').value;
 
         offer.sdp = sdpFilterCodec('video', codecName, offer.sdp);
-        // MARK: test: transformation
-        // const video_transform = document.getElementById('video-transform').value;
-        const video_transform = "test";
         return fetch('/offer', {
             body: JSON.stringify({
                 sdp: offer.sdp,
@@ -117,7 +121,6 @@ function start() {
     };
 
     var parameters = { "ordered": false, "maxRetransmits": 0 };
-    // var parameters = { "ordered": true };
 
     dc = pc.createDataChannel('chat', parameters);
     dc.addEventListener('close', () => {
@@ -142,17 +145,13 @@ function start() {
     });
 
     // Build media constraints.
-
     const constraints = {
         audio: false,
         video: false
     };
 
     const videoConstraints = {};
-
-    // MARK: test: select camera
-    // const device = document.getElementById('video-input').value;
-    const device = "e6852e7c5c2cf1ed8f64f2aef74a244258616410ec9a5af815d12677be3c5356";
+    const device = document.getElementById('video-input').value;
     if (device) {
         videoConstraints.deviceId = { exact: device };
     } else {
@@ -173,7 +172,6 @@ function start() {
     constraints.video = Object.keys(videoConstraints).length ? videoConstraints : true;
 
     // Acquire media and start negotiation.
-
     if (constraints.video) {
         document.getElementById('media').style.display = 'block';
         navigator.mediaDevices.getUserMedia(constraints).then((stream) => {
@@ -187,6 +185,9 @@ function start() {
     } else {
         negotiate();
     }
+
+    // Initialize Three.js scene
+    initThreeJS();
 }
 
 function sdpFilterCodec(kind, codec, realSdp) {
@@ -245,7 +246,87 @@ function escapeRegExp(string) {
     return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); // $& means the whole matched string
 }
 
-enumerateInputDevices();
+function initThreeJS() {
+    const videoTransform = document.getElementById('video-transform').value;
+    if (videoTransform === 'avatar') {
+        const container = document.getElementById('model-container');
+        container.style.display = 'block';
 
-// MARK: test: startup
-start();
+        scene = new THREE.Scene();
+        camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 1.5, 3);
+
+        renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        container.appendChild(renderer.domElement);
+
+        const light = new THREE.DirectionalLight(0xffffff, 1);
+        light.position.set(1, 1, 1);
+        scene.add(light);
+
+        const loader = new FBXLoader();
+        loader.load('https://ioann44.ru/skeleton/skeleton_model.fbx', (object) => {
+            model = object;
+            model.scale.set(0.04, 0.04, 0.04);
+            scene.add(model);
+            const skeletonHelper = new THREE.SkeletonHelper(model);
+            // scene.add(skeletonHelper);
+
+            const textureLoader = new TextureLoader();
+            textureLoader.load('https://ioann44.ru/skeleton/skeleton_texture.png', (texture) => {
+                const material = new THREE.MeshBasicMaterial({ map: texture });
+                model.traverse((child) => {
+                    if (child.isMesh) {
+                        child.material = material;
+                    }
+                });
+            });
+
+            const upperArm = model.getObjectByName("Bip01_L_UpperArm");
+            const lowerArm = model.getObjectByName("Bip01_L_Forearm");
+
+            let skinnedMesh = null;
+            model.traverse((child) => {
+                if (child.isSkinnedMesh) {
+                    skinnedMesh = child;
+                }
+            });
+            if (skinnedMesh) {
+                skinnedMesh.frustumCulled = false;
+                skinnedMesh.updateMatrixWorld(true);
+            }
+
+            if (upperArm && lowerArm && skinnedMesh) {
+                animateArm(upperArm, lowerArm, skinnedMesh);
+            }
+        });
+    }
+}
+
+function animateArm(upperArm, lowerArm, skinnedMesh) {
+    let angle = -0.5;
+    let direction = 1;
+
+    function animate() {
+        requestAnimationFrame(animate);
+        angle += direction * 0.01;
+
+        if (angle > -0.5 || angle < -1.5) {
+            direction *= -1;
+        }
+
+        upperArm.rotation.y = angle;
+        lowerArm.rotation.y = angle * 0.8;
+
+        skinnedMesh.skeleton.update();
+        skinnedMesh.updateMatrixWorld(true);
+
+        renderer.render(scene, camera);
+    }
+
+    animate();
+}
+
+document.getElementById('start').addEventListener('click', start)
+
+enumerateInputDevices();

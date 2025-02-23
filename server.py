@@ -42,9 +42,10 @@ class VideoTransformTrack(MediaStreamTrack):
         self.last_tracked = {}
         self.processing = None
         self.images_buffer: deque[MatLike] = deque(maxlen=IMAGES_BUFFER_SIZE)
+        self.avatar_data = None  # Внешняя переменная для хранения JSON-данных
 
     async def recv(self):
-        if self.transform not in ("detection", "tracking"):
+        if self.transform not in ("detection", "tracking", "avatar"):
             progress_bar.update()
 
         frame: VideoFrame = await self.track.recv()
@@ -99,6 +100,12 @@ class VideoTransformTrack(MediaStreamTrack):
                 else:
                     assert isinstance(self.last_tracked, dict)
                     gesture.draw_tracks(img, self.last_tracked)
+            case "avatar":
+                if self.processing is None or self.processing.done():
+                    progress_bar.update()
+                    if self.processing is not None:
+                        self.avatar_data = self.processing.result()
+                    self.processing = self.executor.submit(skeleton.get_avatar_coordinates, img)
             case _:
                 pass
 
@@ -143,8 +150,14 @@ async def offer(request):
     def on_datachannel(channel):
         @channel.on("message")
         def on_message(message):
-            if isinstance(message, str) and message.startswith("ping"):
-                channel.send("pong" + message[4:])
+            if isinstance(message, str):
+                if message.startswith("ping"):
+                    channel.send("pong" + message[4:])
+                    # elif message == "request_avatar_data":
+                    video_track = pc.getSenders()[0].track
+                    assert isinstance(video_track, VideoTransformTrack)
+                    if video_track.avatar_data:
+                        channel.send(video_track.avatar_data)
 
     @pc.on("connectionstatechange")
     async def on_connectionstatechange():
