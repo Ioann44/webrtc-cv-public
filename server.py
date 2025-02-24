@@ -152,7 +152,7 @@ async def offer(request):
         def on_message(message):
             if isinstance(message, str):
                 if message.startswith("ping"):
-                    channel.send("pong" + message[4:])
+                    # channel.send("pong" + message[4:])
                     # elif message == "request_avatar_data":
                     video_track = pc.getSenders()[0].track
                     assert isinstance(video_track, VideoTransformTrack)

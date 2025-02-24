@@ -135,12 +135,13 @@ function start() {
             dc.send(message);
         }, 1000);
     });
-    dc.addEventListener('message', (evt) => {
-        dataChannelLog.textContent += '< ' + evt.data + '\n';
 
-        if (evt.data.substring(0, 4) === 'pong') {
-            var elapsed_ms = current_stamp() - parseInt(evt.data.substring(5), 10);
-            dataChannelLog.textContent += ' RTT ' + elapsed_ms + ' ms\n';
+    dc.addEventListener('message', (evt) => {
+        try {
+            const data = JSON.parse(evt.data);
+            updateAvatarPose(data);
+        } catch (error) {
+            console.error("Ошибка парсинга JSON:", error);
         }
     });
 
@@ -269,62 +270,55 @@ function initThreeJS() {
             model = object;
             model.scale.set(0.04, 0.04, 0.04);
             scene.add(model);
-            const skeletonHelper = new THREE.SkeletonHelper(model);
-            // scene.add(skeletonHelper);
 
+            // Загружаем текстуру
             const textureLoader = new TextureLoader();
             textureLoader.load('https://ioann44.ru/skeleton/skeleton_texture.png', (texture) => {
-                const material = new THREE.MeshBasicMaterial({ map: texture });
                 model.traverse((child) => {
                     if (child.isMesh) {
-                        child.material = material;
+                        child.material = new THREE.MeshBasicMaterial({ map: texture });
                     }
                 });
             });
 
-            const upperArm = model.getObjectByName("Bip01_L_UpperArm");
-            const lowerArm = model.getObjectByName("Bip01_L_Forearm");
-
-            let skinnedMesh = null;
-            model.traverse((child) => {
-                if (child.isSkinnedMesh) {
-                    skinnedMesh = child;
-                }
-            });
-            if (skinnedMesh) {
-                skinnedMesh.frustumCulled = false;
-                skinnedMesh.updateMatrixWorld(true);
+            function animate() {
+                requestAnimationFrame(animate);
+                renderer.render(scene, camera);
             }
-
-            if (upperArm && lowerArm && skinnedMesh) {
-                animateArm(upperArm, lowerArm, skinnedMesh);
-            }
+            animate();
         });
     }
 }
 
-function animateArm(upperArm, lowerArm, skinnedMesh) {
-    let angle = -0.5;
-    let direction = 1;
+function updateAvatarPose(data) {
+    if (!model) return;
 
-    function animate() {
-        requestAnimationFrame(animate);
-        angle += direction * 0.01;
-
-        if (angle > -0.5 || angle < -1.5) {
-            direction *= -1;
+    // Применяем координаты тела
+    if (data.body) {
+        for (const boneName in data.body) {
+            const bone = model.getObjectByName(boneName);
+            if (bone) {
+                const [x, y, z] = data.body[boneName];
+                bone.position.set(x, y, z);
+            }
         }
-
-        upperArm.rotation.y = angle;
-        lowerArm.rotation.y = angle * 0.8;
-
-        skinnedMesh.skeleton.update();
-        skinnedMesh.updateMatrixWorld(true);
-
-        renderer.render(scene, camera);
     }
 
-    animate();
+    // Применяем координаты рук
+    if (data.hands) {
+        for (const handData of data.hands) {
+            for (const boneName in handData) {
+                const bone = model.getObjectByName(boneName);
+                if (bone) {
+                    const [x, y, z] = handData[boneName];
+                    bone.position.set(x, y, z);
+                }
+            }
+        }
+    }
+
+    // Обновляем модель после изменения позы
+    model.updateMatrixWorld(true);
 }
 
 document.getElementById('start').addEventListener('click', start)
