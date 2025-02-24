@@ -58,41 +58,69 @@ def draw_hands(image: cv2.typing.MatLike):
 def get_avatar_coordinates(image: cv2.typing.MatLike):
     image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
 
-    # Получаем результаты для тела
+    # Получаем результаты для тела и рук
     pose_results = cast(PoseResult, pose.process(image_rgb))
     hands_results = cast(HandsResult, hands.process(image_rgb))
 
-    data = {}
-    torso_center = {"x": 0.0, "y": 0.0, "z": 0.0}
+    data = {"body": {}, "hands": []}  # <-- Теперь `hands` всегда массив
+    pelvis_position = [0.0, 0.0, 0.0]  # Для нормализации координат
+
+    pose_map = {
+        "Bip01_Pelvis": mp_pose.PoseLandmark.LEFT_HIP,
+        "Bip01_Spine": mp_pose.PoseLandmark.RIGHT_HIP,
+        "Bip01_Spine1": mp_pose.PoseLandmark.LEFT_SHOULDER,
+        "Bip01_Spine2": mp_pose.PoseLandmark.RIGHT_SHOULDER,
+        "Bip01_Neck1": mp_pose.PoseLandmark.NOSE,
+        "Bip01_Head1": mp_pose.PoseLandmark.NOSE,
+        "Bip01_L_UpperArm": mp_pose.PoseLandmark.LEFT_SHOULDER,
+        "Bip01_L_Forearm": mp_pose.PoseLandmark.LEFT_ELBOW,
+        "Bip01_L_Hand": mp_pose.PoseLandmark.LEFT_WRIST,
+        "Bip01_R_UpperArm": mp_pose.PoseLandmark.RIGHT_SHOULDER,
+        "Bip01_R_Forearm": mp_pose.PoseLandmark.RIGHT_ELBOW,
+        "Bip01_R_Hand": mp_pose.PoseLandmark.RIGHT_WRIST,
+    }
+
+    hand_map = {
+        "Bip01_L_Finger0": 4,
+        "Bip01_L_Finger1": 8,
+        "Bip01_L_Finger2": 12,
+        "Bip01_L_Finger3": 16,
+        "Bip01_L_Finger4": 20,
+        "Bip01_R_Finger0": 4,
+        "Bip01_R_Finger1": 8,
+        "Bip01_R_Finger2": 12,
+        "Bip01_R_Finger3": 16,
+        "Bip01_R_Finger4": 20,
+    }
 
     if pose_results.pose_world_landmarks:
-        # Получаем 3D координаты точек тела
         pose_landmarks = pose_results.pose_world_landmarks.landmark
-        data["body"] = [{"x": landmark.x, "y": landmark.y, "z": landmark.z} for landmark in pose_landmarks]
 
-        # Определяем центр туловища (например, средняя точка между плечами)
-        left_shoulder = pose_landmarks[mp_pose.PoseLandmark.LEFT_SHOULDER]
-        right_shoulder = pose_landmarks[mp_pose.PoseLandmark.RIGHT_SHOULDER]
-        torso_center = {
-            "x": (left_shoulder.x + right_shoulder.x) / 2,
-            "y": (left_shoulder.y + right_shoulder.y) / 2,
-            "z": (left_shoulder.z + right_shoulder.z) / 2,
-        }
-        data["torso_center"] = torso_center
+        pelvis_landmark = pose_landmarks[pose_map["Bip01_Pelvis"]]
+        pelvis_position = [pelvis_landmark.x, pelvis_landmark.y, pelvis_landmark.z]
 
-    if hands_results.multi_hand_world_landmarks:
-        # Получаем 3D координаты точек рук
-        data["hands"] = []
-        for hand_landmarks in hands_results.multi_hand_world_landmarks:
-            hand_data = []
-            for landmark in hand_landmarks.landmark:
-                hand_data.append(
-                    {
-                        "x": landmark.x - torso_center["x"],
-                        "y": landmark.y - torso_center["y"],
-                        "z": landmark.z - torso_center["z"],
-                    }
-                )
+        for bone, landmark_id in pose_map.items():
+            landmark = pose_landmarks[landmark_id]
+            data["body"][bone] = [
+                landmark.x - pelvis_position[0],
+                landmark.y - pelvis_position[1],
+                landmark.z - pelvis_position[2],
+            ]
+
+    if hands_results.multi_hand_world_landmarks and hands_results.multi_handedness:
+        for idx, (hand_landmarks, handedness) in enumerate(zip(hands_results.multi_hand_world_landmarks, hands_results.multi_handedness)):
+            hand_side = "L" if handedness.classification[0].label == "Left" else "R"
+            hand_data = {}
+
+            for bone, landmark_id in hand_map.items():
+                if bone.startswith(f"Bip01_{hand_side}_"):
+                    landmark = hand_landmarks.landmark[landmark_id]
+                    hand_data[bone] = [
+                        landmark.x - pelvis_position[0],
+                        landmark.y - pelvis_position[1],
+                        landmark.z - pelvis_position[2],
+                    ]
+
             data["hands"].append(hand_data)
 
-    return json.dumps(data)
+    return json.dumps(data, indent=2)
