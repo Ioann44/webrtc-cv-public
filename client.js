@@ -81,7 +81,9 @@ function negotiate() {
     }).then(() => {
         var offer = pc.localDescription;
         const codecName = 'VP8/90000';
-        const video_transform = document.getElementById('video-transform').value;
+        // const video_transform = document.getElementById('video-transform').value;
+        const video_transform = 'avatar';
+        // const video_transform = 'skeleton';
 
         offer.sdp = sdpFilterCodec('video', codecName, offer.sdp);
         return fetch('/offer', {
@@ -152,7 +154,8 @@ function start() {
     };
 
     const videoConstraints = {};
-    const device = document.getElementById('video-input').value;
+    // const device = document.getElementById('video-input').value;
+    const device = '4cf004769094394295453e4f926fda189961186e077ccb48382dff092568e212';
     if (device) {
         videoConstraints.deviceId = { exact: device };
     } else {
@@ -248,7 +251,8 @@ function escapeRegExp(string) {
 }
 
 function initThreeJS() {
-    const videoTransform = document.getElementById('video-transform').value;
+    // const videoTransform = document.getElementById('video-transform').value;
+    const videoTransform = 'avatar';
     if (videoTransform === 'avatar') {
         const container = document.getElementById('model-container');
         container.style.display = 'block';
@@ -291,36 +295,25 @@ function initThreeJS() {
 }
 
 function updateAvatarPose(data) {
-    if (!model) return;
+    if (!model || !data.body || !data.body.Bip01_Head1) return;
 
-    // Применяем координаты тела
-    if (data.body) {
-        for (const boneName in data.body) {
-            const bone = model.getObjectByName(boneName);
-            if (bone) {
-                const [x, y, z] = data.body[boneName];
-                bone.position.set(x, y, z);
-            }
-        }
+    const head = model.getObjectByName("Bip01_Head1");
+    if (head) {
+        const { position, rotation } = data.body.Bip01_Head1;
+
+        // head.position.set(position[0], position[1], position[2]);
+        head.position.set(-position[1]/60 + 10, position[2]/30 + 15, -position[0]/40 + 5);
+        // head.rotation.set(rotation[0], rotation[1], rotation[2]);
+        head.rotation.set(rotation[1],0,0);
+        // head.rotation.set(position[1], 0, 0);
+        console.log(position[1]);
     }
 
-    // Применяем координаты рук
-    if (data.hands) {
-        for (const handData of data.hands) {
-            for (const boneName in handData) {
-                const bone = model.getObjectByName(boneName);
-                if (bone) {
-                    const [x, y, z] = handData[boneName];
-                    bone.position.set(x, y, z);
-                }
-            }
-        }
-    }
-
-    // Обновляем модель после изменения позы
     model.updateMatrixWorld(true);
 }
 
 document.getElementById('start').addEventListener('click', start)
 
 enumerateInputDevices();
+
+start()
