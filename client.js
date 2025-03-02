@@ -135,10 +135,15 @@ function start() {
             var message = 'ping ' + current_stamp();
             dataChannelLog.textContent += '> ' + message + '\n';
             dc.send(message);
-        }, 1000);
+        }, 20);
     });
 
     dc.addEventListener('message', (evt) => {
+        // Логируем частоту обновления
+        // const currentTime = performance.now();
+        // const deltaTime = currentTime - lastUpdateTime;
+        // lastUpdateTime = currentTime;
+        // console.log(`Update interval: ${deltaTime} ms`);
         try {
             const data = JSON.parse(evt.data);
             updateAvatarPose(data);
@@ -155,7 +160,7 @@ function start() {
 
     const videoConstraints = {};
     // const device = document.getElementById('video-input').value;
-    const device = '4cf004769094394295453e4f926fda189961186e077ccb48382dff092568e212';
+    const device = 'b6673ee90948517c79575a10c876a964a11c6823eaf290b71bf75cd94f6eece0';
     if (device) {
         videoConstraints.deviceId = { exact: device };
     } else {
@@ -294,6 +299,8 @@ function initThreeJS() {
     }
 }
 
+let lastUpdateTime = performance.now();
+
 function updateAvatarPose(data) {
     if (!model || !data.body || !data.body.Bip01_Head1) return;
 
@@ -301,16 +308,25 @@ function updateAvatarPose(data) {
     if (head) {
         const { position, rotation } = data.body.Bip01_Head1;
 
-        // head.position.set(position[0], position[1], position[2]);
-        head.position.set(-position[1]/60 + 10, position[2]/30 + 15, -position[0]/40 + 5);
-        // head.rotation.set(rotation[0], rotation[1], rotation[2]);
-        head.rotation.set(rotation[1],0,0);
-        // head.rotation.set(position[1], 0, 0);
-        console.log(position[1]);
+        // Обновляем позицию и вращение головы
+        head.position.set(-position[1] / 60 + 15, position[2] / 30 + 15, -position[0] / 40 + 7);
+        head.rotation.set(rotation[1]+2*rotation[2], -rotation[2], 6*rotation[0] + 0.5);
+        console.log(rotation[0]);
     }
 
+    let angle = -0.5;
+    let direction = 1;
+
+    // Обновляем матрицу модели только один раз
     model.updateMatrixWorld(true);
+
+    // Логируем частоту обновления
+    // const currentTime = performance.now();
+    // const deltaTime = currentTime - lastUpdateTime;
+    // lastUpdateTime = currentTime;
+    // console.log(`Update interval: ${deltaTime} ms`);
 }
+
 
 document.getElementById('start').addEventListener('click', start)
 
