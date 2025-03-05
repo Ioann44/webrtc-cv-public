@@ -157,7 +157,7 @@ async def offer(request):
                     video_track = pc.getSenders()[0].track
                     assert isinstance(video_track, VideoTransformTrack)
                     if video_track.avatar_data:
-                        channel.send(video_track.avatar_data)
+                        channel.send(json.dumps(video_track.avatar_data))
 
     @pc.on("connectionstatechange")
     async def on_connectionstatechange():

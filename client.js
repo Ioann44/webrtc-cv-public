@@ -14,7 +14,8 @@ var pc = null;
 var dc = null, dcInterval = null;
 
 // Three.js variables
-let scene, camera, renderer, model;
+let scene, camera, renderer, model, pointMesh;
+const halfPI = Math.PI / 2;
 
 function createPeerConnection() {
     var config = { sdpSemantics: 'unified-plan' };
@@ -41,6 +42,7 @@ function createPeerConnection() {
 function enumerateInputDevices() {
     const populateSelect = (select, devices) => {
         let counter = 1;
+        select.removeChild(select.lastChild);
         devices.forEach((device) => {
             const option = document.createElement('option');
             option.value = device.deviceId;
@@ -133,7 +135,7 @@ function start() {
         dataChannelLog.textContent += '- open\n';
         dcInterval = setInterval(() => {
             var message = 'ping ' + current_stamp();
-            dataChannelLog.textContent += '> ' + message + '\n';
+            // dataChannelLog.textContent += '> ' + message + '\n';
             dc.send(message);
         }, 20);
     });
@@ -159,12 +161,11 @@ function start() {
     };
 
     const videoConstraints = {};
-    // const device = document.getElementById('video-input').value;
-    const device = 'b6673ee90948517c79575a10c876a964a11c6823eaf290b71bf75cd94f6eece0';
+    const device = document.getElementById('video-input').value;
     if (device) {
         videoConstraints.deviceId = { exact: device };
     } else {
-        alert('Please select a video input device.')
+        // alert('Please select a video input device.')
     }
 
     const resolution = ""
@@ -265,6 +266,8 @@ function initThreeJS() {
         scene = new THREE.Scene();
         camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
         camera.position.set(0, 1.5, 3);
+        // camera.position.set(0, 1.5, -3);
+        // camera.rotation.y = Math.PI;
 
         renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
@@ -279,6 +282,18 @@ function initThreeJS() {
             model = object;
             model.scale.set(0.04, 0.04, 0.04);
             scene.add(model);
+            // model.getObjectByName("Bip01").rotateY(Math.PI);
+            // model.getObjectByName("Bip01_Spine4").rotateX(Math.PI);
+
+            const skeletonHelper = new THREE.SkeletonHelper(model);
+            scene.add(skeletonHelper);
+            const axesHelper = new THREE.AxesHelper(5);
+            scene.add(axesHelper);
+            const pointGeometry = new THREE.SphereGeometry(0.05);
+            const pointMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+            pointMesh = new THREE.Mesh(pointGeometry, pointMaterial);
+            pointMesh.position.copy(new THREE.Vector3(-2, 2.5, 0));
+            scene.add(pointMesh);
 
             // Загружаем текстуру
             const textureLoader = new TextureLoader();
@@ -300,24 +315,71 @@ function initThreeJS() {
 }
 
 let lastUpdateTime = performance.now();
+// const parts = [
+//     "Bip01_Head1", "Bip01_Spine4", "Bip01_Spine2", "Bip01_L_UpperArm", "Bip01_R_UpperArm",
+//     "Bip01_L_Forearm", "Bip01_R_Forearm", "Bip01_L_Hand", "Bip01_R_Hand", "Bip01_L_Thigh", "Bip01_R_Thigh",
+//     "Bip01_L_Calf", "Bip01_R_Calf", "Bip01_L_Foot", "Bip01_R_Foot"
+// ];
+const parts = [
+    "Bip01_Head1", "Bip01_Spine2", "Bip01_L_UpperArm", "Bip01_R_UpperArm",
+    "Bip01_L_Forearm", "Bip01_R_Forearm", "Bip01_L_Hand", "Bip01_R_Hand"
+];
+// const parts = ["Bip01_Spine2", "Bip01_Head1"]
+
+const pos_mods = { x: [2, 0], y: [-2, 1.5], z: [-2, 0] }
 
 function updateAvatarPose(data) {
-    if (!model || !data.body || !data.body.Bip01_Head1) return;
+    if (!model || !data.body) return;
+    delete data.body.Bip01_Head1.position;
+    // delete data.body.Bip01_Head1.rotation;
+    // delete data.body.Bip01_Spine2.position;
+    // delete data.body.Bip01_Spine2.rotation;
 
-    const head = model.getObjectByName("Bip01_Head1");
-    if (head) {
-        const { position, rotation } = data.body.Bip01_Head1;
+    parts.forEach(part => {
+        const bone = model.getObjectByName(part);
+        if (bone && data.body[part]) {
+            if (data.body[part].position) {
+                const position = data.body[part].position;
+                const globalPos = new THREE.Vector3(
+                    position[0] * pos_mods.x[0] + pos_mods.x[1],
+                    position[1] * pos_mods.y[0] + pos_mods.y[1],
+                    position[2] * pos_mods.z[0] + pos_mods.z[1]
+                );
 
-        // Обновляем позицию и вращение головы
-        head.position.set(-position[1] / 60 + 15, position[2] / 30 + 15, -position[0] / 40 + 7);
-        head.rotation.set(rotation[1]+2*rotation[2], -rotation[2], 6*rotation[0] + 0.5);
-        console.log(rotation[0]);
-    }
+                if (bone.parent.isBone) {
+                    if (bone.parent.children.length === 1) {
+                        bone.parent.lookAt(globalPos);
+                        bone.parent.rotateY(-halfPI);
+                    }
+                }
 
-    let angle = -0.5;
-    let direction = 1;
+                bone.parent.worldToLocal(globalPos);
+                bone.position.copy(globalPos);
+            }
+            if (data.body[part].rotation) {
+                // yaw, roll, pitch
+                const rotation = data.body[part].rotation;
 
-    // Обновляем матрицу модели только один раз
+                let oldParent = bone.parent;
+                scene.attach(bone);
+
+                // I hate gimbal lock
+                if (part === "Bip01_Spine2") {
+                    bone.rotation.set(rotation[2], rotation[0], rotation[1]);
+                    bone.rotateY(halfPI);
+                    bone.rotateZ(halfPI);
+                }
+                if (part === "Bip01_Head1") {
+                    const quaternion = new THREE.Quaternion();
+                    quaternion.setFromEuler(new THREE.Euler(- halfPI, -rotation[1] - halfPI, rotation[2]));
+                    bone.quaternion.copy(quaternion);
+                    bone.rotateX(rotation[0]);
+                }
+                oldParent.attach(bone);
+            }
+        }
+    });
+
     model.updateMatrixWorld(true);
 
     // Логируем частоту обновления
