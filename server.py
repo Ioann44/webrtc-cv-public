@@ -5,9 +5,10 @@ import os
 import uuid
 from collections import deque
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any, cast
+from typing import Any, Optional, cast
 
 import cv2
+import numpy as np
 import tqdm
 from aiohttp import web
 from aiortc import MediaStreamTrack, RTCPeerConnection, RTCSessionDescription
@@ -17,7 +18,7 @@ from cv2.typing import MatLike
 from module import gesture, skeleton
 
 ROOT = os.path.dirname(__file__)
-IMAGES_BUFFER_SIZE = 5
+IMAGES_BUFFER_SIZE = 1
 
 logger = logging.getLogger("pc")
 pcs = set()
@@ -33,16 +34,18 @@ class VideoTransformTrack(MediaStreamTrack):
 
     kind = "video"
 
-    def __init__(self, track, transform):
+    def __init__(self, track):
         super().__init__()  # don't forget this!
         self.track = track
-        self.transform = transform
+        self.transform: Optional[str] = None
         self.executor = ThreadPoolExecutor(max_workers=1)
+        self.images_buffer: deque[MatLike] = deque(maxlen=IMAGES_BUFFER_SIZE)
+
+        self.processing = None
+        self.last_hands_drawed = None
         self.last_detected = []
         self.last_tracked = {}
-        self.processing = None
-        self.images_buffer: deque[MatLike] = deque(maxlen=IMAGES_BUFFER_SIZE)
-        self.avatar_data = None  # Внешняя переменная для хранения JSON-данных
+        self.avatar_data = None
 
     async def recv(self):
         if self.transform not in ("detection", "tracking", "avatar"):
@@ -76,15 +79,17 @@ class VideoTransformTrack(MediaStreamTrack):
                 img = cv2.bitwise_and(img_color, img_edges)
             case "edges":
                 img = cv2.cvtColor(cv2.Canny(img, 100, 200), cv2.COLOR_GRAY2BGR)
-            case "skeleton":
-                skeleton.draw_skeleton(img)
-            case "hands":
-                skeleton.draw_hands(img)
-            case "detection" | "tracking":
+            # case "skeleton":  # deprecated
+            #     skeleton.draw_skeleton(img)
+            case "hands" | "detection" | "tracking":
                 self.images_buffer.append(img)
                 if self.processing is None or self.processing.done():
                     progress_bar.update()
-                    if self.transform == "detection":
+                    if self.transform == "hands":
+                        if self.processing is not None:
+                            self.last_hands_drawed = self.processing.result()
+                        self.processing = self.executor.submit(skeleton.draw_hands, img)
+                    elif self.transform == "detection":
                         if self.processing is not None:
                             self.last_detected = self.processing.result()
                         self.processing = self.executor.submit(gesture.detect, img)
@@ -94,7 +99,10 @@ class VideoTransformTrack(MediaStreamTrack):
                         self.processing = self.executor.submit(gesture.track_objects, img)
 
                 img = self.images_buffer[0]
-                if self.transform == "detection":
+                if self.transform == "hands":
+                    if isinstance(self.last_hands_drawed, np.ndarray):
+                        img = self.last_hands_drawed
+                elif self.transform == "detection":
                     assert isinstance(self.last_detected, list)
                     gesture.draw_detections(img, self.last_detected)
                 else:
@@ -151,13 +159,14 @@ async def offer(request):
         @channel.on("message")
         def on_message(message):
             if isinstance(message, str):
-                if message.startswith("ping"):
-                    # channel.send("pong" + message[4:])
-                    # elif message == "request_avatar_data":
-                    video_track = pc.getSenders()[0].track
-                    assert isinstance(video_track, VideoTransformTrack)
-                    if video_track.avatar_data:
-                        channel.send(video_track.avatar_data)
+                video_track = pc.getSenders()[0].track
+                assert isinstance(video_track, VideoTransformTrack)
+                if video_track.transform != message:
+                    video_track.transform = message
+                    logger.info(f'Transform changed to "{message}"')
+                    video_track.processing = None
+                if video_track.transform == "avatar" and video_track.avatar_data:
+                    channel.send(json.dumps(video_track.avatar_data))
 
     @pc.on("connectionstatechange")
     async def on_connectionstatechange():
@@ -174,7 +183,7 @@ async def offer(request):
         #     pc.addTrack(player.audio)
         #     recorder.addTrack(track)
         if track.kind == "video":
-            pc.addTrack(VideoTransformTrack(relay.subscribe(track), transform=params["video_transform"]))
+            pc.addTrack(VideoTransformTrack(relay.subscribe(track)))
             # MARK: save to
             # recorder.addTrack(relay.subscribe(track))
 
