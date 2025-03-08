@@ -113,11 +113,16 @@ function negotiate() {
             method: 'POST'
         });
     }).then((response) => {
+        if (response.status === 429) {
+            alert('Server is busy, take a look on status indicator next time');
+            window.location.reload();
+        }
         return response.json();
     }).then((answer) => {
         return pc.setRemoteDescription(answer);
     }).catch((e) => {
-        alert(e);
+        if (response.status !== 429)
+            alert(e);
     });
 }
 
@@ -410,4 +415,33 @@ async function requestCameraAccess() {
 requestCameraAccess();
 
 document.getElementById('video-input').addEventListener('change', start);
-// start()
+
+document.addEventListener('DOMContentLoaded', function () {
+    async function checkConnectionStatus() {
+        try {
+            const response = await fetch('/busy', { method: 'POST' });
+            const isBusy = await response.text();
+            const statusIndicator = document.getElementById('status-indicator');
+
+            if (isBusy === 'true') {
+                statusIndicator.textContent = 'Connection is busy. Indicator will update when connection is available.';
+                statusIndicator.style.color = 'red';
+                const startButton = document.getElementById('start');
+                if (startButton) {
+                    startButton.disabled = true;
+                }
+            } else {
+                statusIndicator.textContent = 'Connection is available.';
+                statusIndicator.style.color = 'green';
+                const startButton = document.getElementById('start');
+                if (startButton) {
+                    startButton.disabled = false;
+                }
+            }
+        } catch (error) {
+            console.error('Error checking connection status:', error);
+        }
+    }
+    setInterval(checkConnectionStatus, 5000);
+    checkConnectionStatus();
+});

@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 import os
+import time
 import uuid
 from collections import deque
 from concurrent.futures import ThreadPoolExecutor
@@ -137,6 +138,9 @@ async def javascript(request):
 
 
 async def offer(request):
+    if any(pc.connectionState in {"new", "connecting", "connected"} for pc in pcs):
+        return web.Response(status=429)
+
     params = await request.json()
     offer = RTCSessionDescription(sdp=params["sdp"], type=params["type"])
 
@@ -144,10 +148,7 @@ async def offer(request):
     pc_id = "PeerConnection(%s)" % uuid.uuid4()
     pcs.add(pc)
 
-    def log_info(msg, *args):
-        logger.info(pc_id + " " + msg, *args)
-
-    log_info("Created for %s", request.remote)
+    logger.info("Created for %s", request.remote)
 
     # prepare local media
     # player = MediaPlayer(os.path.join(ROOT, "demo-instruct.wav"))
@@ -156,11 +157,15 @@ async def offer(request):
     save_to = None
     # save_to = "recorded.mp4"
     recorder = save_to and MediaRecorder(save_to) or MediaBlackhole()
+    last_message_time = time.time()
 
     @pc.on("datachannel")
     def on_datachannel(channel):
         @channel.on("message")
         def on_message(message):
+            nonlocal last_message_time
+            last_message_time = time.time()
+
             if isinstance(message, str):
                 video_track = pc.getSenders()[0].track
                 assert isinstance(video_track, VideoTransformTrack)
@@ -177,27 +182,37 @@ async def offer(request):
 
     @pc.on("connectionstatechange")
     async def on_connectionstatechange():
-        log_info("Connection state is %s", pc.connectionState)
-        if pc.connectionState == "failed":
+        logger.info("Connection state is %s", pc.connectionState)
+        if pc.connectionState == "failed" or pc.connectionState == "closed":
             await pc.close()
             pcs.discard(pc)
 
     @pc.on("track")
     def on_track(track):
-        log_info("Track %s received", track.kind)
-
-        # if track.kind == "audio":
-        #     pc.addTrack(player.audio)
-        #     recorder.addTrack(track)
+        logger.info("Track %s received", track.kind)
         if track.kind == "video":
             pc.addTrack(VideoTransformTrack(relay.subscribe(track)))
-            # MARK: save to
-            # recorder.addTrack(relay.subscribe(track))
 
         @track.on("ended")
         async def on_ended():
-            log_info("Track %s ended", track.kind)
+            logger.info("Track %s ended", track.kind)
             await recorder.stop()
+
+    async def check_connection_activity():
+        nonlocal last_message_time
+        while pc.connectionState in ("new", "connecting"):
+            await asyncio.sleep(1)
+            last_message_time = time.time()
+        while pc.connectionState == "connected":
+            if time.time() - last_message_time > 2:
+                logger.info("Closing connection due to inactivity")
+                await pc.close()
+                pcs.discard(pc)
+                break
+            await asyncio.sleep(1)
+
+    # Start checking connection activity
+    asyncio.ensure_future(check_connection_activity())
 
     # handle offer
     await pc.setRemoteDescription(offer)
@@ -220,6 +235,13 @@ async def on_shutdown(app):
     pcs.clear()
 
 
+async def is_busy(request):
+    return web.Response(
+        status=200,
+        text="true" if any(pc.connectionState in {"new", "connecting", "connected"} for pc in pcs) else "false",
+    )
+
+
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     app = web.Application()
@@ -227,4 +249,5 @@ if __name__ == "__main__":
     app.router.add_get("/", index)
     app.router.add_get("/client.js", javascript)
     app.router.add_post("/offer", offer)
+    app.router.add_post("/busy", is_busy)
     web.run_app(app, access_log=None, host="127.0.0.1", port=5000)
