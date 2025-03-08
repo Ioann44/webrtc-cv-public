@@ -40,7 +40,7 @@
 
 <body>
     <div class="option">
-        <select id="video-input">
+        <select id="video-input" class="hide-on-start">
             <option value="" selected>No device</option>
         </select>
         <select id="video-transform">
@@ -52,9 +52,11 @@
             <option value="hands">Hands</option>
             <option value="avatar" selected>Avatar</option>
         </select>
+        <label>
+            <!-- enabled by default -->
+            <input type="checkbox" id="mirror-video" checked> Mirror video
+        </label>
     </div>
-
-    <button id="start" class="hide-on-start">Start</button>
 
     <div id="media" style="display: none">
         <video id="video" autoplay="true" playsinline="true"></video>

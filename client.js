@@ -12,7 +12,7 @@ var iceConnectionProgress = 0,
 var pc = null;
 // data channel
 var dc = null, dcInterval = null;
-var videoTransform = "";
+var videoTransform = "", isMirrored = true;
 
 // Three.js variables
 let scene, camera, renderer, model, pointMesh;
@@ -59,7 +59,7 @@ function createPeerConnection() {
 function enumerateInputDevices() {
     const populateSelect = (select, devices) => {
         let counter = 1;
-        select.removeChild(select.lastChild);
+        // select.removeChild(select.lastChild);
         devices.forEach((device) => {
             const option = document.createElement('option');
             option.value = device.deviceId;
@@ -147,7 +147,7 @@ function start() {
     dc.addEventListener('open', () => {
         dataChannelLog.textContent += '- open\n';
         dcInterval = setInterval(() => {
-            dc.send(videoTransform);
+            dc.send(JSON.stringify({ transform: videoTransform, mirror: isMirrored }));
         }, 20);
     });
 
@@ -269,10 +269,9 @@ function escapeRegExp(string) {
     return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); // $& means the whole matched string
 }
 
-// set listener on video-transform change
-document.getElementById('video-transform').addEventListener('change', function () {
-    videoTransform = this.value;
-});
+// listeners on parameters change
+document.getElementById('video-transform').addEventListener('change', function () { videoTransform = this.value; });
+document.getElementById('mirror-video').addEventListener('change', function () { isMirrored = this.checked; });
 
 function initThreeJS() {
     videoTransform = document.getElementById('video-transform').value;
@@ -399,9 +398,16 @@ function updateAvatarPose(data) {
     // console.log(`Update interval: ${deltaTime} ms`);
 }
 
+async function requestCameraAccess() {
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        stream.getTracks().forEach(track => track.stop());
+        enumerateInputDevices();
+    } catch (error) {
+        console.error('Error accessing the camera:', error);
+    }
+}
+requestCameraAccess();
 
-document.getElementById('start').addEventListener('click', start)
-
-enumerateInputDevices();
-
-start()
+document.getElementById('video-input').addEventListener('change', start);
+// start()

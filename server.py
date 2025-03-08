@@ -37,9 +37,11 @@ class VideoTransformTrack(MediaStreamTrack):
     def __init__(self, track):
         super().__init__()  # don't forget this!
         self.track = track
-        self.transform: Optional[str] = None
         self.executor = ThreadPoolExecutor(max_workers=1)
         self.images_buffer: deque[MatLike] = deque(maxlen=IMAGES_BUFFER_SIZE)
+
+        self.transform: Optional[str] = None
+        self.is_mirrored = True
 
         self.processing = None
         self.last_hands_drawed = None
@@ -53,7 +55,8 @@ class VideoTransformTrack(MediaStreamTrack):
 
         frame: VideoFrame = await self.track.recv()
         img: MatLike = frame.to_ndarray(format="bgr24")
-        cv2.flip(img, 1, img)
+        if self.is_mirrored:
+            cv2.flip(img, 1, img)
 
         match self.transform:
             case "cartoon":
@@ -161,10 +164,14 @@ async def offer(request):
             if isinstance(message, str):
                 video_track = pc.getSenders()[0].track
                 assert isinstance(video_track, VideoTransformTrack)
-                if video_track.transform != message:
-                    video_track.transform = message
-                    logger.info(f'Transform changed to "{message}"')
+                message_data = json.loads(message)
+                new_transform = message_data["transform"]
+                video_track.is_mirrored = message_data["mirror"]
+                if video_track.transform != new_transform:
+                    video_track.transform = new_transform
+                    logger.info(f'Transform changed to "{new_transform}"')
                     video_track.processing = None
+
                 if video_track.transform == "avatar" and video_track.avatar_data:
                     channel.send(json.dumps(video_track.avatar_data))
 
