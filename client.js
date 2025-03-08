@@ -164,7 +164,9 @@ function start() {
         // console.log(`Update interval: ${deltaTime} ms`);
         try {
             const data = JSON.parse(evt.data);
-            updateAvatarPose(data);
+            if (data.body) {
+                updateAvatarPose(data);
+            }
         } catch (error) {
             console.error("Ошибка парсинга JSON:", error);
         }

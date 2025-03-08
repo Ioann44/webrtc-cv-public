@@ -149,8 +149,12 @@ type ResultData = dict[Literal["body"], NodeDescription]
 def get_avatar_coordinates(image: cv2.typing.MatLike) -> ResultData:
     image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
     pose_results = cast(PoseResult, pose.process(image_rgb))
-    # pose_landmarks = pose_results.pose_landmarks.landmark
-    pose_landmarks = pose_results.pose_world_landmarks.landmark
+    # landmarks_container = pose_results.pose_landmarks
+    landmarks_container = pose_results.pose_world_landmarks
+    if not landmarks_container:
+        return {}
+    
+    pose_landmarks = landmarks_container.landmark
 
     data = {"body": {}}
     head_landmarks = get_head_info(pose_landmarks)
