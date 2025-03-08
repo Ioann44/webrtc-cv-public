@@ -2,12 +2,6 @@ import * as THREE from 'three';
 import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader';
 import { TextureLoader } from 'three/src/loaders/TextureLoader';
 
-// get DOM elements
-var dataChannelLog = document.getElementById('data-channel');
-var iceConnectionProgress = 0,
-    iceGatheringProgress = 0,
-    signalingProgress = 0;
-
 // peer connection
 var pc = null;
 // data channel
@@ -42,11 +36,6 @@ function createPeerConnection() {
 
     // pc = new RTCPeerConnection(config);
     pc = new RTCPeerConnection();
-
-    // register some listeners to help debugging
-    pc.addEventListener('icegatheringstatechange', () => { iceGatheringProgress++; }, false);
-    pc.addEventListener('iceconnectionstatechange', () => { iceConnectionProgress++; }, false);
-    pc.addEventListener('signalingstatechange', () => { signalingProgress++; }, false);
 
     // connect audio / video
     pc.addEventListener('track', (evt) => {
@@ -147,10 +136,8 @@ function start() {
     dc = pc.createDataChannel('chat', parameters);
     dc.addEventListener('close', () => {
         clearInterval(dcInterval);
-        dataChannelLog.textContent += '- close\n';
     });
     dc.addEventListener('open', () => {
-        dataChannelLog.textContent += '- open\n';
         dcInterval = setInterval(() => {
             dc.send(JSON.stringify({ transform: videoTransform, mirror: isMirrored }));
         }, 20);
@@ -275,22 +262,38 @@ function escapeRegExp(string) {
 }
 
 // listeners on parameters change
-document.getElementById('video-transform').addEventListener('change', function () { videoTransform = this.value; });
+document.getElementById('video-transform').addEventListener('change', function () {
+    if (videoTransform === 'avatar') {
+        const videoClassList = document.getElementById('video').classList
+        videoClassList.toggle('video-minimized');
+        videoClassList.toggle('video-normal');
+        document.getElementById('model-container').style.display = 'none';
+    }
+    videoTransform = this.value;
+    if (videoTransform === 'avatar') {
+        const mediaContainerClassList = document.getElementById('video').classList
+        mediaContainerClassList.toggle('video-minimized');
+        mediaContainerClassList.toggle('video-normal');
+        document.getElementById('model-container').style.display = 'block';
+    }
+});
 document.getElementById('mirror-video').addEventListener('change', function () { isMirrored = this.checked; });
 
 function initThreeJS() {
     videoTransform = document.getElementById('video-transform').value;
     const container = document.getElementById('model-container');
-    container.style.display = 'block';
+    // container.style.display = 'block';
 
+    const modelWindowWidth = window.innerWidth - 30;
+    const modelWindowHeight = window.innerHeight - 30;
     scene = new THREE.Scene();
-    camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+    camera = new THREE.PerspectiveCamera(75, modelWindowWidth / modelWindowHeight, 0.1, 1000);
     camera.position.set(0, 1.5, 3);
     // camera.position.set(0, 1.5, -3);
     // camera.rotation.y = Math.PI;
 
     renderer = new THREE.WebGLRenderer({ antialias: true });
-    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setSize(modelWindowWidth, modelWindowHeight);
     container.appendChild(renderer.domElement);
 
     const light = new THREE.DirectionalLight(0xffffff, 1);
@@ -306,14 +309,14 @@ function initThreeJS() {
         // model.getObjectByName("Bip01_Spine4").rotateX(Math.PI);
 
         const skeletonHelper = new THREE.SkeletonHelper(model);
-        scene.add(skeletonHelper);
+        // scene.add(skeletonHelper);
         const axesHelper = new THREE.AxesHelper(5);
-        scene.add(axesHelper);
+        // scene.add(axesHelper);
         const pointGeometry = new THREE.SphereGeometry(0.05);
         const pointMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
         pointMesh = new THREE.Mesh(pointGeometry, pointMaterial);
         pointMesh.position.copy(new THREE.Vector3(-2, 2.5, 0));
-        scene.add(pointMesh);
+        // scene.add(pointMesh);
 
         // Загружаем текстуру
         const textureLoader = new TextureLoader();
