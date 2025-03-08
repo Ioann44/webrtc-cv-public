@@ -8,8 +8,8 @@ import numpy as np
 from mediapipe.python.solutions import drawing_utils as mp_drawing
 from mediapipe.python.solutions import hands as mp_hands
 from mediapipe.python.solutions import pose as mp_pose
-from mediapipe.python.solutions.pose import PoseLandmark
 from mediapipe.python.solutions.hands import HandLandmark
+from mediapipe.python.solutions.pose import PoseLandmark
 
 MODEL_COMPLEXITY = 1
 
@@ -87,6 +87,7 @@ def draw_hands(image: cv2.typing.MatLike):
                 mp_drawing.DrawingSpec(color=(0, 255, 255), thickness=2, circle_radius=2),
                 mp_drawing.DrawingSpec(color=(255, 255, 0), thickness=2, circle_radius=2),
             )
+    return image
 
 
 def get_avg(
@@ -95,9 +96,9 @@ def get_avg(
 ) -> Landmark:
     if landmarks_container is not None:
         assert isinstance(landmarks[0], PoseLandmark | HandLandmark)
-        landmarks = tuple(landmarks_container[landmark] for landmark in landmarks)
-    assert landmarks
+        landmarks = tuple(landmarks_container[landmark] for landmark in landmarks)  # type: ignore
     x = y = z = 0
+    landmarks = cast(tuple[Landmark, ...], landmarks)
     for landmark in landmarks:
         x += landmark.x
         y += landmark.y
@@ -153,7 +154,7 @@ def get_avatar_coordinates(image: cv2.typing.MatLike) -> ResultData:
     landmarks_container = pose_results.pose_world_landmarks
     if not landmarks_container:
         return {}
-    
+
     pose_landmarks = landmarks_container.landmark
 
     data = {"body": {}}
@@ -161,7 +162,6 @@ def get_avatar_coordinates(image: cv2.typing.MatLike) -> ResultData:
 
     data["body"]["Bip01_Head1"] = head_landmarks
     for model_bone, mp_landmark in (
-        # ("Bip01_Spine", PoseLandmark.LEFT_HIP),
         ("Bip01_L_UpperArm", PoseLandmark.LEFT_SHOULDER),
         ("Bip01_R_UpperArm", PoseLandmark.RIGHT_SHOULDER),
         ("Bip01_L_Forearm", PoseLandmark.LEFT_ELBOW),

@@ -61,8 +61,8 @@ def track_objects(image: cv2.typing.MatLike, threshold=0.25, iou=0.7) -> dict:
 
 def draw_tracks(image: cv2.typing.MatLike, tracks: dict):
     for track_id, (x1, y1, x2, y2, label) in tracks.items():
-        cv2.rectangle(image, (x1, y1), (x2, y2), (0, 255, 0), 2)
-        cv2.putText(image, f"ID {track_id}: {label}", (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+        # cv2.rectangle(image, (x1, y1), (x2, y2), (0, 255, 0), 2)
+        # cv2.putText(image, f"ID {track_id}: {label}", (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
 
         if track_id in trajectories:
             for i in range(1, len(trajectories[track_id])):

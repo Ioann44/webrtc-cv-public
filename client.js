@@ -12,6 +12,7 @@ var iceConnectionProgress = 0,
 var pc = null;
 // data channel
 var dc = null, dcInterval = null;
+var videoTransform = "";
 
 // Three.js variables
 let scene, camera, renderer, model, pointMesh;
@@ -99,16 +100,12 @@ function negotiate() {
     }).then(() => {
         var offer = pc.localDescription;
         const codecName = 'VP8/90000';
-        // const video_transform = document.getElementById('video-transform').value;
-        const video_transform = 'avatar';
-        // const video_transform = 'skeleton';
 
         offer.sdp = sdpFilterCodec('video', codecName, offer.sdp);
         return fetch('/offer', {
             body: JSON.stringify({
                 sdp: offer.sdp,
-                type: offer.type,
-                video_transform: video_transform
+                type: offer.type
             }),
             headers: {
                 'Content-Type': 'application/json'
@@ -150,9 +147,7 @@ function start() {
     dc.addEventListener('open', () => {
         dataChannelLog.textContent += '- open\n';
         dcInterval = setInterval(() => {
-            var message = 'ping ' + current_stamp();
-            // dataChannelLog.textContent += '> ' + message + '\n';
-            dc.send(message);
+            dc.send(videoTransform);
         }, 20);
     });
 
@@ -164,7 +159,7 @@ function start() {
         // console.log(`Update interval: ${deltaTime} ms`);
         try {
             const data = JSON.parse(evt.data);
-            if (data.body) {
+            if (videoTransform === "avatar" && data.body) {
                 updateAvatarPose(data);
             }
         } catch (error) {
@@ -274,62 +269,64 @@ function escapeRegExp(string) {
     return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); // $& means the whole matched string
 }
 
+// set listener on video-transform change
+document.getElementById('video-transform').addEventListener('change', function () {
+    videoTransform = this.value;
+});
+
 function initThreeJS() {
-    // const videoTransform = document.getElementById('video-transform').value;
-    const videoTransform = 'avatar';
-    if (videoTransform === 'avatar') {
-        const container = document.getElementById('model-container');
-        container.style.display = 'block';
+    videoTransform = document.getElementById('video-transform').value;
+    const container = document.getElementById('model-container');
+    container.style.display = 'block';
 
-        scene = new THREE.Scene();
-        camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-        camera.position.set(0, 1.5, 3);
-        // camera.position.set(0, 1.5, -3);
-        // camera.rotation.y = Math.PI;
+    scene = new THREE.Scene();
+    camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+    camera.position.set(0, 1.5, 3);
+    // camera.position.set(0, 1.5, -3);
+    // camera.rotation.y = Math.PI;
 
-        renderer = new THREE.WebGLRenderer({ antialias: true });
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        container.appendChild(renderer.domElement);
+    renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    container.appendChild(renderer.domElement);
 
-        const light = new THREE.DirectionalLight(0xffffff, 1);
-        light.position.set(1, 1, 1);
-        scene.add(light);
+    const light = new THREE.DirectionalLight(0xffffff, 1);
+    light.position.set(1, 1, 1);
+    scene.add(light);
 
-        const loader = new FBXLoader();
-        loader.load('https://ioann44.ru/skeleton/skeleton_model.fbx', (object) => {
-            model = object;
-            model.scale.set(0.04, 0.04, 0.04);
-            scene.add(model);
-            // model.getObjectByName("Bip01").rotateY(Math.PI);
-            // model.getObjectByName("Bip01_Spine4").rotateX(Math.PI);
+    const loader = new FBXLoader();
+    loader.load('https://ioann44.ru/skeleton/skeleton_model.fbx', (object) => {
+        model = object;
+        model.scale.set(0.04, 0.04, 0.04);
+        scene.add(model);
+        // model.getObjectByName("Bip01").rotateY(Math.PI);
+        // model.getObjectByName("Bip01_Spine4").rotateX(Math.PI);
 
-            const skeletonHelper = new THREE.SkeletonHelper(model);
-            scene.add(skeletonHelper);
-            const axesHelper = new THREE.AxesHelper(5);
-            scene.add(axesHelper);
-            const pointGeometry = new THREE.SphereGeometry(0.05);
-            const pointMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
-            pointMesh = new THREE.Mesh(pointGeometry, pointMaterial);
-            pointMesh.position.copy(new THREE.Vector3(-2, 2.5, 0));
-            scene.add(pointMesh);
+        const skeletonHelper = new THREE.SkeletonHelper(model);
+        scene.add(skeletonHelper);
+        const axesHelper = new THREE.AxesHelper(5);
+        scene.add(axesHelper);
+        const pointGeometry = new THREE.SphereGeometry(0.05);
+        const pointMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+        pointMesh = new THREE.Mesh(pointGeometry, pointMaterial);
+        pointMesh.position.copy(new THREE.Vector3(-2, 2.5, 0));
+        scene.add(pointMesh);
 
-            // Загружаем текстуру
-            const textureLoader = new TextureLoader();
-            textureLoader.load('https://ioann44.ru/skeleton/skeleton_texture.png', (texture) => {
-                model.traverse((child) => {
-                    if (child.isMesh) {
-                        child.material = new THREE.MeshBasicMaterial({ map: texture });
-                    }
-                });
+        // Загружаем текстуру
+        const textureLoader = new TextureLoader();
+        textureLoader.load('https://ioann44.ru/skeleton/skeleton_texture.png', (texture) => {
+            model.traverse((child) => {
+                if (child.isMesh) {
+                    child.material = new THREE.MeshBasicMaterial({ map: texture });
+                }
             });
-
-            function animate() {
-                requestAnimationFrame(animate);
-                renderer.render(scene, camera);
-            }
-            animate();
         });
-    }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            renderer.render(scene, camera);
+        }
+        animate();
+    });
 }
 
 let lastUpdateTime = performance.now();
