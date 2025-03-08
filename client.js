@@ -16,6 +16,22 @@ var dc = null, dcInterval = null;
 // Three.js variables
 let scene, camera, renderer, model, pointMesh;
 const halfPI = Math.PI / 2;
+const vecX = new THREE.Vector3(1, 0, 0), vecY = new THREE.Vector3(0, 1, 0), vecZ = new THREE.Vector3(0, 0, 1);
+var reserveQuaternion = new THREE.Quaternion();
+
+function applyEuler(bone, rotX, rotY, rotZ) {
+    let oldParent = bone.parent;
+    scene.attach(bone);
+
+    reserveQuaternion.setFromAxisAngle(vecX, rotX);
+    bone.quaternion.copy(reserveQuaternion);
+    reserveQuaternion.setFromAxisAngle(vecY, rotY);
+    bone.applyQuaternion(reserveQuaternion);
+    reserveQuaternion.setFromAxisAngle(vecZ, rotZ);
+    bone.applyQuaternion(reserveQuaternion);
+
+    oldParent.attach(bone);
+}
 
 function createPeerConnection() {
     var config = { sdpSemantics: 'unified-plan' };
@@ -321,12 +337,13 @@ let lastUpdateTime = performance.now();
 //     "Bip01_L_Calf", "Bip01_R_Calf", "Bip01_L_Foot", "Bip01_R_Foot"
 // ];
 const parts = [
-    "Bip01_Head1", "Bip01_Spine2", "Bip01_L_UpperArm", "Bip01_R_UpperArm",
-    "Bip01_L_Forearm", "Bip01_R_Forearm", "Bip01_L_Hand", "Bip01_R_Hand"
+    "Bip01_Pelvis", "Bip01_Head1", "Bip01_Spine2", "Bip01_L_UpperArm", "Bip01_R_UpperArm",
+    "Bip01_L_Forearm", "Bip01_R_Forearm", "Bip01_L_Hand", "Bip01_R_Hand",
+    "Bip01_L_Thigh", "Bip01_R_Thigh", "Bip01_L_Calf", "Bip01_R_Calf", "Bip01_L_Foot", "Bip01_R_Foot"
 ];
-// const parts = ["Bip01_Spine2", "Bip01_Head1"]
 
 const pos_mods = { x: [2, 0], y: [-2, 1.5], z: [-2, 0] }
+const quarter = Math.PI / 4;
 
 function updateAvatarPose(data) {
     if (!model || !data.body) return;
@@ -360,22 +377,16 @@ function updateAvatarPose(data) {
                 // yaw, roll, pitch
                 const rotation = data.body[part].rotation;
 
-                let oldParent = bone.parent;
-                scene.attach(bone);
-
                 // I hate gimbal lock
                 if (part === "Bip01_Spine2") {
-                    bone.rotation.set(rotation[2], rotation[0], rotation[1]);
-                    bone.rotateY(halfPI);
-                    bone.rotateZ(halfPI);
+                    applyEuler(bone, rotation[0] + halfPI, -rotation[2], rotation[1] + halfPI);
                 }
                 if (part === "Bip01_Head1") {
-                    const quaternion = new THREE.Quaternion();
-                    quaternion.setFromEuler(new THREE.Euler(- halfPI, -rotation[1] - halfPI, rotation[2]));
-                    bone.quaternion.copy(quaternion);
-                    bone.rotateX(rotation[0]);
+                    applyEuler(bone, rotation[0] - halfPI, rotation[2], rotation[1] + halfPI)
                 }
-                oldParent.attach(bone);
+                if (part === "Bip01_Pelvis") {
+                    applyEuler(bone, rotation[2], rotation[0], rotation[1]);
+                }
             }
         }
     });

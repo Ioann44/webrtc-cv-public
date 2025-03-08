@@ -328,14 +328,23 @@ def get_avatar_coordinates(image: cv2.typing.MatLike) -> ResultData:
     top = get_avg(pose_landmarks[PoseLandmark.LEFT_SHOULDER], pose_landmarks[PoseLandmark.RIGHT_SHOULDER])
     bottom = get_avg(pose_landmarks[PoseLandmark.LEFT_HIP], pose_landmarks[PoseLandmark.RIGHT_HIP])
     up_down_diff = get_diffs(top, bottom)
-    # spine_pitch = np.arctan2(up_down_diff.y, -up_down_diff.z)
     spine_pitch = np.arctan2(up_down_diff.z, -up_down_diff.y)
     spine_roll = np.arctan2(up_down_diff.x, -up_down_diff.y)
-
     #  yaw, roll, pitch
     data["body"]["Bip01_Spine2"]["rotation"] = [spine_yaw, spine_roll, spine_pitch]
 
-    return data # type: ignore
+    hips_diff = get_diffs(pose_landmarks[PoseLandmark.RIGHT_HIP], pose_landmarks[PoseLandmark.LEFT_HIP])
+    hip_yaw = np.arctan2(hips_diff.z, hips_diff.x)
+    hip_roll = np.arctan2(hips_diff.y, hips_diff.x)
+    r_hip_knee_diff = get_diffs(pose_landmarks[PoseLandmark.RIGHT_HIP], pose_landmarks[PoseLandmark.RIGHT_KNEE])
+    r_hip_pitch = np.arctan2(r_hip_knee_diff.z, -r_hip_knee_diff.y)
+    l_hip_knee_diff = get_diffs(pose_landmarks[PoseLandmark.LEFT_HIP], pose_landmarks[PoseLandmark.LEFT_KNEE])
+    l_hip_pitch = np.arctan2(l_hip_knee_diff.z, -l_hip_knee_diff.y)
+    hip_pitch = (r_hip_pitch + l_hip_pitch) / 2
+    #  yaw, roll, pitch
+    data["body"]["Bip01_Pelvis"] = {"rotation": [hip_yaw, hip_roll, hip_pitch]}
+
+    return data  # type: ignore
 
 
 def multiply(array: Sequence[float], mul: float):
@@ -344,13 +353,14 @@ def multiply(array: Sequence[float], mul: float):
 
 data = get_avatar_coordinates(posed_img)["body"]
 print("yaw roll pitch")
-print(*map(lambda x: x*57, data["Bip01_Head1"]["rotation"]))
-print(*map(lambda x: x*57, data["Bip01_Spine2"]["rotation"]))
+print(*map(lambda x: x * 57, data["Bip01_Head1"]["rotation"]))
+print(*map(lambda x: x * 57, data["Bip01_Spine2"]["rotation"]))
+print(*map(lambda x: x * 57, data["Bip01_Pelvis"]["rotation"]))
 
 annotaions = (
     (title, ((pos := landmark["position"])[0] * posed_img.shape[1], pos[1] * posed_img.shape[0], 0))
     for title, landmark in data.items()
 )
-show(draw_skeleton(posed_img), posed_img, annotations=annotaions)
+# show(draw_skeleton(posed_img), posed_img, annotations=annotaions)
 
 
