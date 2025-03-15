@@ -25,7 +25,7 @@ logger = logging.getLogger("pc")
 pcs = set()
 relay = MediaRelay()
 
-progress_bar = tqdm.tqdm(unit="frame", smoothing=0.1)
+progress_bar = tqdm.tqdm(unit="frame", smoothing=0.1, mininterval=1)
 
 
 class VideoTransformTrack(MediaStreamTrack):
@@ -204,7 +204,7 @@ async def offer(request):
             await asyncio.sleep(1)
             last_message_time = time.time()
         while pc.connectionState == "connected":
-            if time.time() - last_message_time > 2:
+            if time.time() - last_message_time > 5:
                 logger.info("Closing connection due to inactivity")
                 await pc.close()
                 pcs.discard(pc)

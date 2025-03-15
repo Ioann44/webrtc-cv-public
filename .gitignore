@@ -2,3 +2,4 @@ __pycache__
 .venv
 YOLOv10x_gestures.pt
 *.ipynb
+*.jpg
