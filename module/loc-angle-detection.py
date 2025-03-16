@@ -363,4 +363,96 @@ annotaions = (
 )
 # show(draw_skeleton(posed_img), posed_img, annotations=annotaions)
 
+# %%
+from PIL import Image
+from cv2.typing import MatLike
+import numpy as np
+import torch
 
+# from module.abstracts import DelayedMedia
+
+weight_names = ["celeba_distill", "face_paint_512_v1", "face_paint_512_v2", "paprika"]
+models = [
+    torch.hub.load("bryandlee/animegan2-pytorch:main", "generator", pretrained=w_name)
+    for w_name in weight_names
+]
+face2paint = torch.hub.load("bryandlee/animegan2-pytorch:main", "face2paint", size=512)
+
+# front_img already loaded by open cv
+
+res_images = []
+for model in models:
+    posed_rgb = cv2.cvtColor(front_img, cv2.COLOR_BGR2RGB)
+    pil_img = Image.fromarray(posed_rgb)
+    processed_img = face2paint(model, pil_img)  # type: ignore
+    np_img = np.array(processed_img)
+    cv2_processed_img = cv2.cvtColor(np_img, cv2.COLOR_RGB2BGR)
+    res_images.append(cv2_processed_img)
+
+show(*res_images)
+
+# %%
+res_images = []
+for model in models:
+    posed_rgb = cv2.cvtColor(posed_img, cv2.COLOR_BGR2RGB)
+    pil_img = Image.fromarray(posed_rgb)
+    processed_img = face2paint(model, pil_img)  # type: ignore
+    np_img = np.array(processed_img)
+    cv2_processed_img = cv2.cvtColor(np_img, cv2.COLOR_RGB2BGR)
+    res_images.append(cv2_processed_img)
+
+show(*res_images)
+
+# %%
+import cv2
+import numpy as np
+import onnxruntime as ort
+from PIL import Image
+
+# Загрузка ONNX модели
+onnx_model_path = "/home/projects/webrtc-cv/resources/AnimeGANv3_Hayao_36.onnx"
+# onnx_model_path = "AnimeGANv3_Hayao_36.onnx"
+session = ort.InferenceSession(onnx_model_path, providers=["CPUExecutionProvider"])
+
+def pad_to_multiple(img: np.ndarray, multiple: int = 8) -> np.ndarray:
+    h, w = img.shape[:2]
+
+    # Округляем размеры вверх до ближайшего кратного multiple
+    new_h = (h + multiple - 1) // multiple * multiple
+    new_w = (w + multiple - 1) // multiple * multiple
+
+    # Вычисляем отступы
+    pad_top = (new_h - h) // 2
+    pad_bottom = new_h - h - pad_top
+    pad_left = (new_w - w) // 2
+    pad_right = new_w - w - pad_left
+
+    # Добавляем черные границы (можно заменить cv2.BORDER_REPLICATE для размытия)
+    padded_img = cv2.copyMakeBorder(img, pad_top, pad_bottom, pad_left, pad_right, cv2.BORDER_CONSTANT, value=(0, 0, 0))
+
+    return padded_img
+
+def process_image_onnx(img: np.ndarray) -> np.ndarray:
+    img_padded = pad_to_multiple(img)  # Делаем размеры кратными 8
+    
+    img_rgb = cv2.cvtColor(img_padded, cv2.COLOR_BGR2RGB).astype(np.float32) / 255.0
+    img_input = np.expand_dims(img_rgb, axis=0).astype(np.float32)
+
+    ort_inputs = {session.get_inputs()[0].name: img_input}
+    ort_outs = session.run(None, ort_inputs)[0]
+
+    img_out = np.squeeze(ort_outs, axis=0)
+    img_out = (img_out * 255).clip(0, 255).astype(np.uint8)
+    img_out_bgr = cv2.cvtColor(img_out, cv2.COLOR_RGB2BGR)
+
+    return img_out_bgr
+
+# img_paths = [RESOURCE_DIR.joinpath(img_name).as_posix() for img_name in ['run.jpg', 'road.jpg']]
+img_paths = [RESOURCE_DIR.joinpath(img_name).as_posix() for img_name in 'putin.png putin2.png prigozhin.png prigozhin2.png prigozhin3.jpg'.split()]
+# Загружаем изображение (front_img уже загружен)
+res_images = [process_image_onnx(cv2.imread(img_path)) for img_path in img_paths]
+for i, res_img in enumerate(res_images):
+    cv2.imwrite(RESOURCE_DIR.joinpath(f'out/res_{i}.jpg').as_posix(), res_img)
+
+# Отображаем результат
+show(*res_images)

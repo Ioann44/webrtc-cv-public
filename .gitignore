@@ -3,3 +3,4 @@ __pycache__
 YOLOv10x_gestures.pt
 *.ipynb
 *.jpg
+*.png
