@@ -1,9 +1,12 @@
+Guess these steps are enough to setup your instance on http://127.0.0.1:5000
+
+You probably can try it out on https://cv.ioann44.ru :)
+
 ```bash
-pip install aiohttp aiortc opencv-python
+python -m venv .venv # optional
+source .venv/bin/activate # optional
+
+pip install resources/requirements.txt
+
+python server.py >> logs.txt 2>&1
 ```
-
-The server will play a pre-recorded audio clip and send the received video back
-to the browser, optionally applying a transform to it.
-
-In parallel to media streams, the browser sends a 'ping' message over the data
-channel, and the server replies with 'pong'.
