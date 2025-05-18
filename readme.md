@@ -1,8 +1,14 @@
 Если повезёт
-`docker compose up -d`
+```bash
+docker compose up -d
+```
 
-Если нет, и нужно пересобирать без изменения dockerfile (например, обновил код в репозитории)
-`docker compose up --build`
+Если нет, и нужно пересобирать всё заново (например, после изменения `requirements.txt`)
+```bash
+docker build . --build --no-cache
+```
 
-Ну и только сборка
-`docker build .` (на сервере мог запустить лишь так)
+Пересобрать только со свежим `git clone`, зависимости не менялись
+```bash
+docker build --build-arg GIT_CLONE_INVALIDATE=$(date +%s) .
+```
