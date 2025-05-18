@@ -1,3 +1,4 @@
+import argparse
 import asyncio
 import json
 import logging
@@ -13,7 +14,7 @@ import numpy as np
 import tqdm
 from aiohttp import web
 from aiortc import MediaStreamTrack, RTCPeerConnection, RTCSessionDescription
-from aiortc.contrib.media import MediaBlackhole, MediaRecorder, MediaRelay
+from aiortc.contrib.media import MediaBlackhole, MediaRelay
 from av import VideoFrame
 from cv2.typing import MatLike
 from module import gesture, skeleton
@@ -150,13 +151,7 @@ async def offer(request):
 
     logger.info("Created for %s", request.remote)
 
-    # prepare local media
-    # player = MediaPlayer(os.path.join(ROOT, "demo-instruct.wav"))
-
-    # MARK: save to
-    save_to = None
-    # save_to = "recorded.mp4"
-    recorder = save_to and MediaRecorder(save_to) or MediaBlackhole()
+    recorder = MediaBlackhole()
     last_message_time = time.time()
 
     @pc.on("datachannel")
@@ -243,6 +238,10 @@ async def is_busy(request):
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-host", default="127.0.0.1")
+    args = parser.parse_args()
+
     logging.basicConfig(level=logging.INFO)
     app = web.Application()
     app.on_shutdown.append(on_shutdown)
@@ -250,4 +249,4 @@ if __name__ == "__main__":
     app.router.add_get("/client.js", javascript)
     app.router.add_post("/offer", offer)
     app.router.add_post("/busy", is_busy)
-    web.run_app(app, access_log=None, host="127.0.0.1", port=5000)
+    web.run_app(app, access_log=None, host=args.host, port=5000)
