@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <title>Three.js Scene</title>
+  <style>
+    body {
+      margin: 0;
+    }
+
+    canvas {
+      display: block;
+    }
+  </style>
+</head>
+
+<body>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+  <script>
+    (async () => {
+      const customData = await window.getCustomData();
+      console.log("Custom data from CLI:", customData);
+
+      const color = customData === "red" ? 0xff0000 : 0x00ff00;
+
+      const scene = new THREE.Scene();
+      const camera = new THREE.PerspectiveCamera(75, 1, 0.1, 1000);
+      const renderer = new THREE.WebGLRenderer({ preserveDrawingBuffer: true });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      document.body.appendChild(renderer.domElement);
+
+      const geometry = new THREE.BoxGeometry();
+      const material = new THREE.MeshBasicMaterial({ color: color });
+      const cube = new THREE.Mesh(geometry, material);
+      scene.add(cube);
+
+      camera.position.z = 5;
+      renderer.render(scene, camera);
+
+      return true;
+    })();
+  </script>
+</body>
+
+</html>
