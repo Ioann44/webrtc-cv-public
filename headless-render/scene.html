@@ -13,32 +13,71 @@
       display: block;
     }
   </style>
+  <script type="importmap">
+        {
+            "imports": {
+                "three": "https://cdn.jsdelivr.net/npm/three@0.173.0/build/three.module.min.js",
+                "three/examples/jsm/loaders/FBXLoader": "https://cdn.jsdelivr.net/npm/three@0.173.0/examples/jsm/loaders/FBXLoader.js",
+                "three/src/loaders/TextureLoader": "https://cdn.jsdelivr.net/npm/three@0.173.0/src/loaders/TextureLoader.js"
+            }
+        }
+    </script>
 </head>
 
 <body>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
   <script>
     (async () => {
+      const THREE = await import("three");
+      const { FBXLoader } = await import("three/examples/jsm/loaders/FBXLoader");
+      const { TextureLoader } = await import("three/src/loaders/TextureLoader");
+
+      // MARK: Utils
+      const loadModel = async (fbxUrl, textureUrl) => {
+        const model = await new Promise((resolve, reject) => {
+          new FBXLoader().load(fbxUrl, resolve, undefined, reject);
+        });
+        const texture = await new Promise((resolve, reject) => {
+          new TextureLoader().load(
+            textureUrl,
+            (tex) => {
+              if (tex.image && tex.image.complete) resolve(tex);
+              else tex.image.onload = () => resolve(tex);
+            }, undefined, reject);
+        });
+        model.traverse((child) => {
+          if (child.isMesh) {
+            child.material = new THREE.MeshBasicMaterial({ map: texture });
+          }
+        });
+        return model;
+      }
+
+      // MARK: Render
       const customData = await window.getCustomData();
+      // const customData = "red";
       console.log("Custom data from CLI:", customData);
 
       const color = customData === "red" ? 0xff0000 : 0x00ff00;
 
       const scene = new THREE.Scene();
-      const camera = new THREE.PerspectiveCamera(75, 1, 0.1, 1000);
+      const ratio = window.innerWidth / window.innerHeight;
+      const camera = new THREE.PerspectiveCamera(75, ratio, 0.1, 1000);
       const renderer = new THREE.WebGLRenderer({ preserveDrawingBuffer: true });
       renderer.setSize(window.innerWidth, window.innerHeight);
       document.body.appendChild(renderer.domElement);
 
-      const geometry = new THREE.BoxGeometry();
-      const material = new THREE.MeshBasicMaterial({ color: color });
-      const cube = new THREE.Mesh(geometry, material);
-      scene.add(cube);
+      // model load
+      const model = await loadModel('https://ioann44.ru/skeleton/skeleton_model.fbx', 'https://ioann44.ru/skeleton/skeleton_texture.png');
+
+      model.scale.set(0.04, 0.04, 0.04);
+      scene.add(model);
+      scene.add(new THREE.SkeletonHelper(model));
+      scene.add(new THREE.AxesHelper(5));
 
       camera.position.z = 5;
-      renderer.render(scene, camera);
 
-      return true;
+      renderer.render(scene, camera);
+      window.renderDone = true;
     })();
   </script>
 </body>

@@ -6,16 +6,23 @@ const data = process.argv[4] || "";
 
 (async () => {
   const browser = await puppeteer.launch({ headless: 'new', args: ['--no-sandbox'] });
-  const page = (await browser.newPage()).on('console', message => console.error(`${message.type().substr(0, 3).toUpperCase()} ${message.text()}`));
+  const page = (await browser.newPage()).on(
+    'console', message => console.error(`LOG: ${message.text()}`)
+  ).on(
+    'pageerror', message => console.error(`ERR: ${message.text()}`)
+  );
   await page.setViewport({ width: width, height: height });
   await page.exposeFunction("getCustomData", () => data);
   await page.goto('file://' + process.cwd() + '/scene.html');
 
-  await page.evaluate(async () => {
+  await page.evaluate(() => {
     if (typeof window.renderScene === 'function') {
-      await window.renderScene();
+      window.renderDone = false;
+      window.renderScene();
     }
   });
+
+  await page.waitForFunction('window.renderDone === true');
 
   const buffer = await page.screenshot({ encoding: 'base64' });
   await browser.close();
