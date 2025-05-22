@@ -9,7 +9,7 @@ const data = process.argv[4] || "";
   const page = (await browser.newPage()).on(
     'console', message => console.error(`LOG: ${message.text()}`)
   ).on(
-    'pageerror', message => console.error(`ERR: ${message.text()}`)
+    'pageerror', message => console.error(`ERR: ${message}`)
   );
   await page.setViewport({ width: width, height: height });
   await page.exposeFunction("getCustomData", () => data);
