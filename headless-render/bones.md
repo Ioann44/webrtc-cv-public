@@ -1,0 +1,36 @@
+- [ ] Hips
+- [x] Spine
+- [x] Spine1
+- [x] Spine2
+- [x] Neck
+- [x] Head
+- [x] HeadTop_End
+- [x] Left/RightShoulder
+- [x] Left/RightArm
+- [x] Left/RightForeArm
+- [x] Left/RightHand
+- [ ] Left/RightHandThumb1
+- [ ] Left/RightHandThumb2
+- [ ] Left/RightHandThumb3
+- [ ] Left/RightHandThumb4
+- [ ] Left/RightHandIndex1
+- [ ] Left/RightHandIndex2
+- [ ] Left/RightHandIndex3
+- [ ] Left/RightHandIndex4
+- [ ] Left/RightHandMiddle1
+- [ ] Left/RightHandMiddle2
+- [ ] Left/RightHandMiddle3
+- [ ] Left/RightHandMiddle4
+- [ ] Left/RightHandRing1
+- [ ] Left/RightHandRing2
+- [ ] Left/RightHandRing3
+- [ ] Left/RightHandRing4
+- [ ] Left/RightHandPinky1
+- [ ] Left/RightHandPinky2
+- [ ] Left/RightHandPinky3
+- [ ] Left/RightHandPinky4
+- [x] Left/RightUpLeg
+- [x] Left/RightLeg
+- [x] Left/RightFoot
+- [x] Left/RightToeBase
+- [ ] Left/RightToe_End

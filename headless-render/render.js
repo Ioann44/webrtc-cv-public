@@ -5,7 +5,7 @@ const height = parseInt(process.argv[3]) || 512;
 const data = process.argv[4] || "";
 
 (async () => {
-  const browser = await puppeteer.launch({ headless: 'new', args: ['--no-sandbox'] });
+  const browser = await puppeteer.launch({ headless: 'new', args: ['--no-sandbox', '--enable-unsafe-swiftshader'] });
   const page = (await browser.newPage()).on(
     'console', message => console.error(`LOG: ${message.text()}`)
   ).on(

@@ -11,6 +11,7 @@ var videoTransform = "", isMirrored = true;
 // Three.js variables
 let scene, camera, renderer, model, pointMesh;
 const halfPI = Math.PI / 2;
+const quarterPI = Math.PI / 4;
 const vecX = new THREE.Vector3(1, 0, 0), vecY = new THREE.Vector3(0, 1, 0), vecZ = new THREE.Vector3(0, 0, 1);
 var reserveQuaternion = new THREE.Quaternion();
 
@@ -349,7 +350,6 @@ const parts = [
 ];
 
 const pos_mods = { x: [2, 0], y: [-2, 1.5], z: [-2, 0] }
-const quarter = Math.PI / 4;
 
 function updateAvatarPose(data) {
     if (!model || !data.body) return;

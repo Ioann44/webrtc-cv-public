@@ -34,6 +34,7 @@
       const { TextureLoader } = await import("three/src/loaders/TextureLoader");
 
       // MARK: Utils
+      var model;
       const loadModel = async (modelUrl, textureUrl = null) => {
         const extension = modelUrl.split('.').pop().toLowerCase();
         let model;
@@ -69,12 +70,82 @@
         return model;
       }
 
-      // MARK: Render
-      const customData = await window.getCustomData();
-      // const customData = "red";
-      console.log("Custom data from CLI:", customData);
+      // Three.js variables
+      const halfPI = Math.PI / 2;
+      const quarterPI = Math.PI / 4;
+      const vecX = new THREE.Vector3(1, 0, 0), vecY = new THREE.Vector3(0, 1, 0), vecZ = new THREE.Vector3(0, 0, 1);
+      var reserveQuaternion = new THREE.Quaternion();
+      function applyEuler(bone, rotX, rotY, rotZ) {
+        let oldParent = bone.parent;
+        scene.attach(bone);
 
-      const color = customData === "red" ? 0xff0000 : 0x00ff00;
+        reserveQuaternion.setFromAxisAngle(vecX, rotX);
+        bone.quaternion.copy(reserveQuaternion);
+        reserveQuaternion.setFromAxisAngle(vecY, rotY);
+        bone.applyQuaternion(reserveQuaternion);
+        reserveQuaternion.setFromAxisAngle(vecZ, rotZ);
+        bone.applyQuaternion(reserveQuaternion);
+
+        oldParent.attach(bone);
+      }
+
+      const pos_mods = { x: [1, 0], y: [-1, 0], z: [-1, 0] }
+      function updateAvatarPose(data) {
+        if (!model || !data.body) return;
+
+        Object.keys(data.body).forEach(part => {
+          const bone = model.getObjectByName(part);
+          if (!bone) {
+            console.log(`Bone ${part} not found`);
+            return;
+          }
+          if (data.body[part].position) {
+            const position = data.body[part].position;
+            const globalPos = new THREE.Vector3(
+              position[0] * pos_mods.x[0] + pos_mods.x[1],
+              position[1] * pos_mods.y[0] + pos_mods.y[1],
+              position[2] * pos_mods.z[0] + pos_mods.z[1]
+            );
+
+            if (bone.parent.isBone) {
+              if (bone.parent.children.length === 1) {
+                bone.parent.lookAt(globalPos);
+                bone.parent.rotateX(halfPI);
+              }
+            }
+
+            bone.parent.worldToLocal(globalPos);
+            bone.position.copy(globalPos);
+          }
+          if (data.body[part].rotation) {
+            // yaw, roll, pitch
+            const rotation = data.body[part].rotation;
+
+            // I hate gimbal lock
+            // applyEuler(bone, rotation[0], rotation[2], rotation[1]);
+            
+            // if (part === "Bip01_Spine2") {
+            //   applyEuler(bone, rotation[0] + halfPI, -rotation[2], rotation[1] + halfPI);
+            // }
+            // if (part === "Bip01_Head1") {
+            //   applyEuler(bone, rotation[0] - halfPI, rotation[2], rotation[1] + halfPI)
+            // }
+            // if (part === "Bip01_Pelvis") {
+            //   applyEuler(bone, rotation[2], rotation[0], rotation[1]);
+            // }
+          }
+        });
+
+        model.updateMatrixWorld(true);
+      }
+
+      // MARK: Render
+      var customData = "{}";
+      if (window.getCustomData) {
+        customData = await window.getCustomData();
+      }
+      data = JSON.parse(customData);
+      // console.log("Custom data from CLI:", customData);
 
       const scene = new THREE.Scene();
       const ratio = window.innerWidth / window.innerHeight;
@@ -85,9 +156,9 @@
 
       // model load
       // const model = await loadModel('https://ioann44.ru/skeleton/skeleton_model.fbx', 'https://ioann44.ru/skeleton/skeleton_texture.png');
-      const model = await loadModel(`https://ioann44.ru/models/nanosuit.glb`);
+      model = await loadModel(`https://ioann44.ru/models/nanosuit.glb`);
 
-      const scaleFactor = 0.04;
+      const scaleFactor = 0.02;
       model.scale.set(scaleFactor, scaleFactor, scaleFactor);
       let hips = null;
       model.traverse((obj) => {
@@ -102,10 +173,22 @@
       }
       // model.rotation.y = Math.PI;
       hips.rotation.y = Math.PI;
+      // show model
       scene.add(model);
 
       scene.add(new THREE.SkeletonHelper(model));
       scene.add(new THREE.AxesHelper(5));
+
+      // draw points
+      if (data.points) {
+        const pointGeometry = new THREE.SphereGeometry(0.02);
+        const pointMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+        Object.values(data.points).forEach(arr => {
+          pointMesh = new THREE.Mesh(pointGeometry, pointMaterial);
+          pointMesh.position.copy(new THREE.Vector3(arr[0], -arr[1], -arr[2]));
+          scene.add(pointMesh);
+        });
+      }
 
       const light = new THREE.DirectionalLight(0xffffff, 1);
       light.position.set(5, 10, 7.5);
@@ -113,7 +196,9 @@
       const ambientLight = new THREE.AmbientLight(0xffffff, 1);
       scene.add(ambientLight);
 
-      camera.position.z = 5;
+      camera.position.z = 1.5;
+
+      updateAvatarPose(data);
 
       renderer.render(scene, camera);
       window.renderDone = true;

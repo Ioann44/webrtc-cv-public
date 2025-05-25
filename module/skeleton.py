@@ -1,7 +1,7 @@
 from collections import namedtuple
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Literal, Protocol, Sequence, cast
+from typing import Any, Literal, Optional, Protocol, Sequence, cast
 
 import cv2
 import numpy as np
@@ -92,18 +92,23 @@ def draw_hands(image: cv2.typing.MatLike):
 
 def get_avg(
     *landmarks: Landmark | PoseLandmark | HandLandmark,
-    landmarks_container: PoseLandmarks | HandLandmarks | None = None,
+    container: PoseLandmarks | HandLandmarks | None = None,
+    weights: Optional[Sequence[int | float]] = None,
 ) -> Landmark:
-    if landmarks_container is not None:
+    if container is not None:
         assert isinstance(landmarks[0], PoseLandmark | HandLandmark)
-        landmarks = tuple(landmarks_container[landmark] for landmark in landmarks)  # type: ignore
+        landmarks = tuple(container[landmark] for landmark in landmarks)  # type: ignore
+    if weights:
+        assert len(weights) == len(landmarks)
     x = y = z = 0
     landmarks = cast(tuple[Landmark, ...], landmarks)
-    for landmark in landmarks:
-        x += landmark.x
-        y += landmark.y
-        z += landmark.z
-    return namedtuple("Averages", "x y z")(x / len(landmarks), y / len(landmarks), z / len(landmarks))
+    for i, landmark in enumerate(landmarks):
+        weight = weights[i] if weights else 1
+        x += landmark.x * weight
+        y += landmark.y * weight
+        z += landmark.z * weight
+    weights_sum = sum(weights) if weights else len(landmarks)
+    return namedtuple("Averages", "x y z")(x / weights_sum, y / weights_sum, z / weights_sum)
 
 
 def get_pos_list(landmark: Landmark) -> list[float]:

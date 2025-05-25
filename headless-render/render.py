@@ -1,7 +1,9 @@
 import base64
+import json
 import os
 import subprocess
 from io import BytesIO
+from typing import Optional
 
 import numpy as np
 from PIL import Image
@@ -9,7 +11,8 @@ from PIL import Image
 working_dir = os.path.dirname(os.path.abspath(__file__))
 
 
-def render_threejs_scene_to_numpy(width, height, data_str, print_err=False):
+def render_threejs_scene_to_numpy(width, height, data_dct: Optional[dict] = None, print_err=False):
+    data_str = json.dumps(data_dct or {})
     result = subprocess.run(
         ["/root/.nvm/versions/node/v22.14.0/bin/node", "render.js", str(width), str(height), data_str],
         cwd=working_dir,
@@ -30,5 +33,4 @@ def render_threejs_scene_to_numpy(width, height, data_str, print_err=False):
 
 
 if __name__ == "__main__":
-    data_str = "red"
-    image = render_threejs_scene_to_numpy(100, 100, data_str)
+    image = render_threejs_scene_to_numpy(100, 100)
